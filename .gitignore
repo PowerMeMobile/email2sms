@@ -1,4 +1,5 @@
 deps/*
 ebin/*
 priv/*
+rel/email2sms/
 TAGS
