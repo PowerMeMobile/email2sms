@@ -1,0 +1,11 @@
+{application, email2sms, [
+    {description, "email2sms"},
+    {vsn, "0.0.1"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib
+    ]},
+    {mod, {email2sms_app, []}},
+    {env, []}
+]}.
