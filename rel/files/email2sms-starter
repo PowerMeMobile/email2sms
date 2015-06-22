@@ -1,8 +1,0 @@
-#!/bin/bash
-
-if [[ $# -ne 2 ]]; then
-	echo "email2sms <params>"
-	exit 1
-fi
-
-./bin/email2sms script "$1" "$2"
