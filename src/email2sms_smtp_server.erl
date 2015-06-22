@@ -140,11 +140,11 @@ terminate(Reason, St) ->
     ?log_error("Terminate failed with: ~p", [Reason]),
     {ok, Reason, St}.
 
-%% -------------------------------------------------------------------------
-%% private functions
-%% -------------------------------------------------------------------------
+%% ===================================================================
+%% Internal
+%% ===================================================================
 
-really_handle_DATA(From, To, Data, St) ->
+do_handle_DATA(From, To, Data, St) ->
     {_Type, _Subtype, Headers, _Params, _Content} =
         Component = mimemail:decode(Data),
     UUID = uuid:unparse(uuid:generate()),
