@@ -8,7 +8,6 @@
 %% gen_smtp_server_session callbacks
 -export([
     init/4,
-    terminate/2,
     handle_HELO/2,
     handle_EHLO/3,
     handle_AUTH/4,
@@ -20,7 +19,8 @@
     handle_RSET/1,
     handle_VRFY/2,
     handle_other/3,
-    code_change/3
+    code_change/3,
+    terminate/2
 ]).
 
 -include_lib("alley_common/include/logging.hrl").
@@ -36,7 +36,7 @@ start_link() ->
     {ok, Addr} = application:get_env(smtp_addr),
     {ok, Port} = application:get_env(smtp_port),
     {ok, Protocol} = application:get_env(smtp_protocol),
-    {ok, Domain} = application:get_env(smtp_domain),
+    {ok, [Domain|_]} = application:get_env(smtp_domains),
     Options  = [{address, Addr}, {port, Port}, {protocol, Protocol}, {domain, Domain}],
     Result = gen_smtp_server:start_link({local, ?MODULE}, ?MODULE, [Options]),
     case Result of
@@ -57,23 +57,32 @@ stop() ->
 %% gen_smtp_server_session callbacks
 %% ===================================================================
 
-init(Domain, _SessionCount, Peeraddr, _Options) ->
-    ?log_info("Got connection from: ~p", [Peeraddr]),
-    {ok, Greeting} = application:get_env(smtp_greeting),
-    Banner = io_lib:format("~s ESMTP ~s", [Domain, Greeting]),
-    {ok, Banner, #st{}}.
-
-terminate(normal, St) ->
-    {ok, normal, St};
-terminate(Reason, St) ->
-    ?log_error("Terminate failed with: ~p", [Reason]),
-    {ok, Reason, St}.
+init(Domain, SessionCount, PeerAddr, _Options) ->
+    ?log_debug("Got connection from: ~p", [PeerAddr]),
+    {ok, MaxSessionCount} = application:get_env(smtp_max_session_count),
+	case SessionCount > MaxSessionCount of
+		false ->
+            {ok, Greeting} = application:get_env(smtp_greeting),
+            Banner = [Domain, " ESMTP ", Greeting],
+			{ok, Banner, #st{}};
+		true ->
+			?log_error("Connection limit exceeded", []),
+			{stop, normal, ["421 ", Domain, " is too busy right now"]}
+	end.
 
 handle_HELO(_Peername, St) ->
     {ok, St}.
 
 handle_EHLO(_Peername, Extensions, St) ->
-    {ok, Extensions, St}.
+    {ok, MaxMsgSize} = application:get_env(smtp_max_msg_size),
+    Extensions2 =
+        case MaxMsgSize of
+            undefined ->
+                proplists:delete("SIZE", Extensions);
+            _ when is_integer(MaxMsgSize) ->
+                [{"SIZE", integer_to_list(MaxMsgSize)} | proplists:delete("SIZE", Extensions)]
+        end,
+    {ok, Extensions2, St}.
 
 handle_AUTH(_Type, _Username, _Password, St) ->
     {ok, St}.
@@ -81,24 +90,25 @@ handle_AUTH(_Type, _Username, _Password, St) ->
 handle_MAIL(_From, St) ->
     {ok, St}.
 
-handle_MAIL_extension(_Extension, _St) ->
+handle_MAIL_extension(Extension, _St) ->
+	?log_debug("Unknown MAIL FROM extension: ~s", [Extension]),
     error.
 
 handle_RCPT(_To, St) ->
     {ok, St}.
 
-%% This function is never ever called.
-handle_RCPT_extension(_Extension, _St) ->
+handle_RCPT_extension(Extension, _St) ->
+	?log_debug("Unknown RCPT TO extension: ~s", [Extension]),
     error.
 
 handle_DATA(From, To, Data, St) ->
-    ?log_info("Got an email (from: ~s, to: ~s)",
+    ?log_debug("Got an email (from: ~s, to: ~s)",
         [From, string:join([binary_to_list(A) || A <- To], ", ")]),
     {ok, MaxMsgSize} = application:get_env(smtp_max_msg_size),
     if
         MaxMsgSize =:= undefined orelse size(Data) =< MaxMsgSize ->
             try
-                really_handle_DATA(From, To, Data, St)
+                do_handle_DATA(From, To, Data, St)
             catch
                 Exc:Cls ->
                     ?log_error("Exception: ~p:~p", [Exc, Cls]),
@@ -113,15 +123,22 @@ handle_DATA(From, To, Data, St) ->
 handle_RSET(_St) ->
     #st{}.
 
-handle_VRFY(_Address, St) ->
+handle_VRFY(Address, St) ->
+    ?log_debug("Verify called: ~s", [Address]),
     {error, "252 VRFY disabled", St}.
 
 handle_other(Verb, Arg, St) ->
-    ?log_error("Unrecognized command (~s ~s)", [Verb, Arg]),
+    ?log_info("Unrecognized other command (Verb: ~s, Arg: ~s)", [Verb, Arg]),
     {"500 Error: verb not recognized", St}.
 
 code_change(_OldVsn, St, _Extra) ->
     {ok, St}.
+
+terminate(normal, St) ->
+    {ok, normal, St};
+terminate(Reason, St) ->
+    ?log_error("Terminate failed with: ~p", [Reason]),
+    {ok, Reason, St}.
 
 %% -------------------------------------------------------------------------
 %% private functions
