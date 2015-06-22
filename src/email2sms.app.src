@@ -1,10 +1,12 @@
 {application, email2sms, [
     {description, "email2sms"},
-    {vsn, "0.0.1"},
+    {vsn, git},
     {registered, []},
     {applications, [
         kernel,
-        stdlib
+        stdlib,
+        gen_smtp,
+        alley_services
     ]},
     {mod, {email2sms_app, []}},
     {env, []}

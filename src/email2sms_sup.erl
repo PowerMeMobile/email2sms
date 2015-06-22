@@ -27,4 +27,7 @@ start_link() ->
 
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
+        {email2sms_smtp_server,
+            {email2sms_smtp_server, start_link, []},
+            transient, 5000, worker, [email2sms_smtp_server]}
     ]}}.
