@@ -36,7 +36,7 @@ start_link() ->
     {ok, Addr} = application:get_env(smtp_addr),
     {ok, Port} = application:get_env(smtp_port),
     {ok, Protocol} = application:get_env(smtp_protocol),
-    {ok, [Domain|_]} = application:get_env(smtp_domains),
+    {ok, [Domain|_]} = application:get_env(smtp_local_domains),
     Options  = [{address, Addr}, {port, Port}, {protocol, Protocol}, {domain, Domain}],
     Result = gen_smtp_server:start_link({local, ?MODULE}, ?MODULE, [Options]),
     case Result of
@@ -66,8 +66,8 @@ init(Domain, SessionCount, PeerAddr, _Options) ->
             Banner = [Domain, " ESMTP ", Greeting],
 			{ok, Banner, #st{}};
 		true ->
-			?log_error("Connection limit exceeded", []),
-			{stop, normal, ["554 ", Domain, " is too busy right now"]}
+			?log_error("Max session count exceeded: ~p", [SessionCount]),
+			{stop, normal, ["554 ", Domain, " is busy right now"]}
 	end.
 
 handle_HELO(_Peername, St) ->
