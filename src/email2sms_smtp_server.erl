@@ -67,7 +67,7 @@ init(Domain, SessionCount, PeerAddr, _Options) ->
 			{ok, Banner, #st{}};
 		true ->
 			?log_error("Connection limit exceeded", []),
-			{stop, normal, ["421 ", Domain, " is too busy right now"]}
+			{stop, normal, ["554 ", Domain, " is too busy right now"]}
 	end.
 
 handle_HELO(_Peername, St) ->
