@@ -104,20 +104,13 @@ handle_RCPT_extension(Extension, _St) ->
 handle_DATA(From, To, Data, St) ->
     ?log_debug("Got an email (from: ~s, to: ~s)",
         [From, string:join([binary_to_list(A) || A <- To], ", ")]),
-    {ok, MaxMsgSize} = application:get_env(smtp_max_msg_size),
-    if
-        MaxMsgSize =:= undefined orelse size(Data) =< MaxMsgSize ->
-            try
-                do_handle_DATA(From, To, Data, St)
-            catch
-                Exc:Cls ->
-                    ?log_error("Exception: ~p:~p", [Exc, Cls]),
-                    ?log_error("Probably too deep mime nesting met", []),
-                    {error, "554 MIME type not supported.", St}
-            end;
-        true ->
-            ?log_error("Message too big (~w bytes)", [size(Data)]),
-            {error, "521 Message Too Big", St}
+    try
+        do_handle_DATA(From, To, Data, St)
+    catch
+        Exc:Cls ->
+            ?log_error("Exception: ~p:~p", [Exc, Cls]),
+            ?log_error("Probably too deep mime nesting met", []),
+            {error, "554 MIME type not supported.", St}
     end.
 
 handle_RSET(_St) ->
