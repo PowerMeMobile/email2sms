@@ -26,6 +26,7 @@
 -include("application.hrl").
 -include("email2sms_errors.hrl").
 -include_lib("alley_common/include/logging.hrl").
+-include_lib("alley_services/include/alley_services.hrl").
 
 %-define(TEST, 1).
 -ifdef(TEST).
@@ -34,6 +35,9 @@
 -endif.
 
 -type email() :: binary().
+-type auth_schema() :: from_address
+                     | subject
+                     | to_address.
 
 -record(st, {
     type :: binary(),
@@ -41,7 +45,9 @@
     headers :: [{binary(), binary()}],
     params  :: [{binary(), term()}],
     content :: term(),
-    recipients :: [email()]
+    recipients :: [email()],
+    auth_schema :: auth_schema(),
+    customer :: #auth_customer_v1{}
 }).
 
 %% ===================================================================
@@ -191,9 +197,44 @@ handle_data(filter_recipients, St) ->
         Count > MaxRecipients ->
             {error, ?E_TOO_MANY_RECIPIENTS, St};
         true ->
-            handle_data(authenticate_subject, St#st{recipients = Recipients2})
+            handle_data(authenticate, St#st{recipients = Recipients2})
     end;
-handle_data(authenticate_subject, St) ->
+handle_data(authenticate, St) ->
+    {ok, Schemes} = application:get_env(?APP, auth_schemes),
+    Methods = [
+        {from_address, fun authenticate_from_address/1},
+        {subject,      fun authenticate_subject/1},
+        {to_address,   fun authenticate_to_address/1}
+    ],
+    Fun = fun
+        ({Schema, Method}, next_schema) ->
+            case lists:member(Schema, Schemes) of
+                true ->
+                    case Method(St) of
+                        {ok, Customer} ->
+                            {Schema, Customer};
+                        {error, Reason} ->
+                            ?log_debug("Authentication schema: ~p failed with: ~p",
+                                [Schema, Reason]),
+                            next_schema
+                    end;
+                false ->
+                    next_schema
+            end;
+        ({_, _}, {Schema, Customer}) ->
+            {Schema, Customer}
+    end,
+    case lists:foldl(Fun, next_schema, Methods) of
+        next_schema ->
+            {error, ?E_AUTHENTICATION, St};
+        {Schema, Customer} ->
+            St2 = St#st{
+                auth_schema = Schema,
+                customer = Customer
+            },
+            handle_data(check_coverage, St2)
+    end;
+handle_data(check_coverage, St) ->
     {error, ?E_NOT_IMPLEMENTED, St};
 handle_data(prepare_body, St) ->
     {error, ?E_NOT_IMPLEMENTED, St};
