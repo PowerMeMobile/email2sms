@@ -244,10 +244,10 @@ handle_data(send, St) ->
     UserId = Customer#auth_customer_v1.user_id,
     Originator = Customer#auth_customer_v1.default_source,
     Recipients = St#st.recipients,
-    %{Encoding, NumType} = reformat_message_type(Req#'SendSms'.messageType),
-    %Message = alley_services_utils:convert_arabic_numbers(Req#'SendSms'.smsText, NumType),
-    Encoding = default,
+
     Message = <<"Hello from Email">>,
+
+    {ok, Encoding} = alley_services_utils:guess_encoding(Message),
     Size = alley_services_utils:chars_size(Encoding, Message),
     Params = common_smpp_params(Customer) ++ [
         {esm_class, 3},
