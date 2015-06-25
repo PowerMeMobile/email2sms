@@ -1,0 +1,9 @@
+language: erlang
+script: "make test"
+otp_release:
+  - R16B03-1
+notifications:
+  email:
+    - d.klionsky@dev.powermemobile.com
+ - sudo apt-get update -qq
+ - sudo apt-get install -qq uuid-dev
