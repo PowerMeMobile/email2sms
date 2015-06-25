@@ -24,6 +24,7 @@
 ]).
 
 -include("application.hrl").
+-include("email2sms_errors.hrl").
 -include_lib("alley_common/include/logging.hrl").
 
 %-define(TEST, 1).
@@ -83,7 +84,7 @@ init(Domain, SessionCount, PeerAddr, _Options) ->
             {ok, Banner, #st{}};
         true ->
             ?log_error("Max session count exceeded: ~p", [SessionCount]),
-            {stop, normal, ["554 ", Domain, " is busy right now"]}
+            {stop, normal, ?E_SERVER_BUSY}
     end.
 
 handle_HELO(_Peername, St) ->
@@ -162,7 +163,7 @@ handle_VRFY(Address, St) ->
 
 handle_other(Verb, Arg, St) ->
     ?log_info("Unrecognized other command (Verb: ~s, Arg: ~s)", [Verb, Arg]),
-    {"500 Error: verb not recognized", St}.
+    {error, ?E_NOT_RECOGNIZED, St}.
 
 code_change(_OldVsn, St, _Extra) ->
     {ok, St}.
@@ -186,21 +187,21 @@ handle_data(filter_recipients, St) ->
     Count = length(Recipients2),
     if
         Count =:= 0 ->
-            {error, "550 No valid recipients found", St};
+            {error, ?E_NO_RECIPIENTS, St};
         Count > MaxRecipients ->
-            {error, "550 Too many recipients specified", St};
+            {error, ?E_TOO_MANY_RECIPIENTS, St};
         true ->
             handle_data(authenticate_subject, St#st{recipients = Recipients2})
     end;
 handle_data(authenticate_subject, St) ->
-    {error, "502 Not implemented", St};
+    {error, ?E_NOT_IMPLEMENTED, St};
 handle_data(prepare_body, St) ->
-    {error, "502 Not implemented", St};
+    {error, ?E_NOT_IMPLEMENTED, St};
 handle_data(send, St) ->
 
     UUID = uuid:unparse(uuid:generate()),
     {ok, UUID, St},
-    {error, "502 Not implemented", St}.
+    {error, ?E_NOT_IMPLEMENTED, St}.
 
 recover_to_cc_bcc(All, Headers) ->
     To = parse_addresses(proplists:get_value(<<"to">>, Headers, [])),
