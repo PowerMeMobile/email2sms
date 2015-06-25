@@ -1,6 +1,8 @@
+[![Build Status](https://travis-ci.org/PowerMeMobile/email2sms.svg?branch=master)](https://travis-ci.org/PowerMeMobile/email2sms)
+
 ## Prerequisites
 
-In order to compile and run the **email2sms** utility you need to have [Erlang](http://www.erlang.org/) and GNU make installed.
+In order to compile and run the **email2sms** server you need to have [Erlang](http://www.erlang.org/) and GNU make installed.
 
 ## Compilation
 
