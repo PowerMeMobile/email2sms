@@ -76,15 +76,15 @@ stop() ->
 init(Domain, SessionCount, PeerAddr, _Options) ->
     ?log_debug("Got connection from: ~p", [PeerAddr]),
     {ok, MaxSessionCount} = application:get_env(?APP, smtp_max_session_count),
-	case SessionCount > MaxSessionCount of
-		false ->
+    case SessionCount > MaxSessionCount of
+        false ->
             {ok, Greeting} = application:get_env(?APP, smtp_greeting),
             Banner = [Domain, " ESMTP ", Greeting],
-			{ok, Banner, #st{}};
-		true ->
-			?log_error("Max session count exceeded: ~p", [SessionCount]),
-			{stop, normal, ["554 ", Domain, " is busy right now"]}
-	end.
+            {ok, Banner, #st{}};
+        true ->
+            ?log_error("Max session count exceeded: ~p", [SessionCount]),
+            {stop, normal, ["554 ", Domain, " is busy right now"]}
+    end.
 
 handle_HELO(_Peername, St) ->
     {ok, St}.
@@ -107,14 +107,14 @@ handle_MAIL(_From, St) ->
     {ok, St}.
 
 handle_MAIL_extension(Extension, _St) ->
-	?log_debug("Unknown MAIL FROM extension: ~s", [Extension]),
+    ?log_debug("Unknown MAIL FROM extension: ~s", [Extension]),
     error.
 
 handle_RCPT(_To, St) ->
     {ok, St}.
 
 handle_RCPT_extension(Extension, _St) ->
-	?log_debug("Unknown RCPT TO extension: ~s", [Extension]),
+    ?log_debug("Unknown RCPT TO extension: ~s", [Extension]),
     error.
 
 handle_DATA(From, To, Data, St) ->
