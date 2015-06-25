@@ -23,6 +23,7 @@
     terminate/2
 ]).
 
+-include("application.hrl").
 -include_lib("alley_common/include/logging.hrl").
 
 -record(st, {}).
@@ -33,10 +34,10 @@
 
 -spec start_link() -> {ok, pid()} | ignore | {error, any()}.
 start_link() ->
-    {ok, Addr} = application:get_env(smtp_addr),
-    {ok, Port} = application:get_env(smtp_port),
-    {ok, Protocol} = application:get_env(smtp_protocol),
-    {ok, [Domain|_]} = application:get_env(smtp_local_domains),
+    {ok, Addr} = application:get_env(?APP, smtp_addr),
+    {ok, Port} = application:get_env(?APP, smtp_port),
+    {ok, Protocol} = application:get_env(?APP, smtp_protocol),
+    {ok, [Domain|_]} = application:get_env(?APP, smtp_local_domains),
     Options  = [{address, Addr}, {port, Port}, {protocol, Protocol}, {domain, Domain}],
     Result = gen_smtp_server:start_link({local, ?MODULE}, ?MODULE, [Options]),
     case Result of
@@ -59,10 +60,10 @@ stop() ->
 
 init(Domain, SessionCount, PeerAddr, _Options) ->
     ?log_debug("Got connection from: ~p", [PeerAddr]),
-    {ok, MaxSessionCount} = application:get_env(smtp_max_session_count),
+    {ok, MaxSessionCount} = application:get_env(?APP, smtp_max_session_count),
 	case SessionCount > MaxSessionCount of
 		false ->
-            {ok, Greeting} = application:get_env(smtp_greeting),
+            {ok, Greeting} = application:get_env(?APP, smtp_greeting),
             Banner = [Domain, " ESMTP ", Greeting],
 			{ok, Banner, #st{}};
 		true ->
@@ -74,7 +75,7 @@ handle_HELO(_Peername, St) ->
     {ok, St}.
 
 handle_EHLO(_Peername, Extensions, St) ->
-    {ok, MaxMsgSize} = application:get_env(smtp_max_msg_size),
+    {ok, MaxMsgSize} = application:get_env(?APP, smtp_max_msg_size),
     Extensions2 =
         case MaxMsgSize of
             undefined ->
