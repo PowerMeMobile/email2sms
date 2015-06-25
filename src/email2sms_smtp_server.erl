@@ -188,16 +188,16 @@ handle_data(filter_recipients, St) ->
     {ok, Fields} = application:get_env(?APP, smtp_recipient_fields),
     {ok, Domains} = application:get_env(?APP, smtp_local_domains),
     {ok, MaxRecipients} = application:get_env(?APP, smtp_max_recipient_count),
-    Recipients = collect_recipients_from_fields(St#st.headers, Fields),
-    Recipients2 = filter_recipients_using_domains(Recipients, Domains),
-    Count = length(Recipients2),
+    Emails = collect_emails_from_fields(St#st.headers, Fields),
+    Recipients = filter_recipients_using_domains(Emails, Domains),
+    Count = length(Recipients),
     if
         Count =:= 0 ->
             {error, ?E_NO_RECIPIENTS, St};
         Count > MaxRecipients ->
             {error, ?E_TOO_MANY_RECIPIENTS, St};
         true ->
-            handle_data(authenticate, St#st{recipients = Recipients2})
+            handle_data(authenticate, St#st{recipients = Recipients})
     end;
 handle_data(authenticate, St) ->
     {ok, Schemes} = application:get_env(?APP, auth_schemes),
@@ -256,27 +256,27 @@ parse_addresses(AddrsRaw) ->
     {ok, AddrsParsed} = smtp_util:parse_rfc822_addresses(AddrsRaw),
     [list_to_binary(Addr) || {_Name, Addr} <- AddrsParsed].
 
-collect_recipients_from_fields(Headers, Fields) ->
-    collect_recipients_from_fields(Headers, Fields, []).
+collect_emails_from_fields(Headers, Fields) ->
+    collect_emails_from_fields(Headers, Fields, []).
 
-collect_recipients_from_fields(_Headers, [], Acc) ->
+collect_emails_from_fields(_Headers, [], Acc) ->
     Acc;
-collect_recipients_from_fields(Headers, [F|Fs], Acc) ->
+collect_emails_from_fields(Headers, [F|Fs], Acc) ->
     Acc2 = Acc ++ proplists:get_value(F, Headers, []),
-    collect_recipients_from_fields(Headers, Fs, Acc2).
+    collect_emails_from_fields(Headers, Fs, Acc2).
 
-filter_recipients_using_domains(Recipients, Domains) ->
-    filter_recipients_using_domains(Recipients, Domains, []).
+filter_recipients_using_domains(Emails, Domains) ->
+    filter_recipients_using_domains(Emails, Domains, []).
 
 filter_recipients_using_domains([], _Domains, Acc) ->
     lists:reverse(Acc);
-filter_recipients_using_domains([R|Rs], Domains, Acc) ->
-    [_Addr, Domain] = binary:split(R, <<"@">>),
+filter_recipients_using_domains([E|Es], Domains, Acc) ->
+    [Addr, Domain] = binary:split(E, <<"@">>),
     case lists:member(Domain, Domains) of
         true ->
-            filter_recipients_using_domains(Rs, Domains, [R|Acc]);
+            filter_recipients_using_domains(Es, Domains, [Addr|Acc]);
         false ->
-            filter_recipients_using_domains(Rs, Domains, Acc)
+            filter_recipients_using_domains(Es, Domains, Acc)
     end.
 
 %% ===================================================================
@@ -306,25 +306,25 @@ recover_to_cc_bcc_test() ->
             [{<<"to">>,<<"to@m.c">>},
              {<<"cc">>,<<"cc@m.c">>}])).
 
-collect_recipients_from_fields_test() ->
+collect_emails_from_fields_test() ->
     Headers = [{<<"to">>,[<<"to@m.c">>]},
                {<<"cc">>,[<<"cc@m.c">>]},
                {<<"bcc">>,[<<"bcc@m.c">>]}],
     Fields0 = [],
     FieldsCc = [<<"cc">>],
     FieldsAll = [<<"to">>, <<"cc">>, <<"bcc">>],
-    ?assertEqual([], collect_recipients_from_fields(Headers, Fields0)),
-    ?assertEqual([<<"cc@m.c">>], collect_recipients_from_fields(Headers, FieldsCc)),
-    ?assertEqual([<<"to@m.c">>, <<"cc@m.c">>, <<"bcc@m.c">>], collect_recipients_from_fields(Headers, FieldsAll)).
+    ?assertEqual([], collect_emails_from_fields(Headers, Fields0)),
+    ?assertEqual([<<"cc@m.c">>], collect_emails_from_fields(Headers, FieldsCc)),
+    ?assertEqual([<<"to@m.c">>, <<"cc@m.c">>, <<"bcc@m.c">>], collect_emails_from_fields(Headers, FieldsAll)).
 
 filter_recipients_using_domains_test() ->
-    Recipients = [<<"a@m.c">>, <<"b@n.c">>, <<"c@m.d">>, <<"d@n.d">>],
+    Emails = [<<"a@m.c">>, <<"b@n.c">>, <<"c@m.d">>, <<"d@n.d">>],
     Domains0 = [],
     Domains1 = [<<"m.c">>],
     Domains2 = [<<"n.c">>, <<"n.d">>, <<"n.e">>],
-    ?assertEqual([], filter_recipients_using_domains(Recipients, Domains0)),
-    ?assertEqual([<<"a@m.c">>], filter_recipients_using_domains(Recipients, Domains1)),
-    ?assertEqual([<<"b@n.c">>, <<"d@n.d">>], filter_recipients_using_domains(Recipients, Domains2)).
+    ?assertEqual([], filter_recipients_using_domains(Emails, Domains0)),
+    ?assertEqual([<<"a">>], filter_recipients_using_domains(Emails, Domains1)),
+    ?assertEqual([<<"b">>, <<"d">>], filter_recipients_using_domains(Emails, Domains2)).
 
 -endif.
 
