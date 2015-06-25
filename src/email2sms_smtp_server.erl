@@ -235,14 +235,57 @@ handle_data(authenticate, St) ->
             handle_data(check_coverage, St2)
     end;
 handle_data(check_coverage, St) ->
-    {error, ?E_NOT_IMPLEMENTED, St};
+    handle_data(prepare_body, St);
 handle_data(prepare_body, St) ->
-    {error, ?E_NOT_IMPLEMENTED, St};
+    handle_data(send, St);
 handle_data(send, St) ->
+    Customer = St#st.customer,
+    CustomerUuid = Customer#auth_customer_v1.customer_uuid,
+    UserId = Customer#auth_customer_v1.user_id,
+    Originator = Customer#auth_customer_v1.default_source,
+    Recipients = St#st.recipients,
+    %{Encoding, NumType} = reformat_message_type(Req#'SendSms'.messageType),
+    %Message = alley_services_utils:convert_arabic_numbers(Req#'SendSms'.smsText, NumType),
+    Encoding = default,
+    Message = <<"Hello from Email">>,
+    Size = alley_services_utils:chars_size(Encoding, Message),
+    Params = common_smpp_params(Customer) ++ [
+        {esm_class, 3},
+        {protocol_id, 0}
+    ],
+    Req = #send_req{
+        customer = Customer,
+        customer_uuid = CustomerUuid,
+        user_id = UserId,
+        interface = mm,
+        originator = reformat_addr(Originator),
+        recipients = reformat_addrs(Recipients),
 
-    UUID = uuid:unparse(uuid:generate()),
-    {ok, UUID, St},
-    {error, ?E_NOT_IMPLEMENTED, St}.
+        req_type = single,
+        message = Message,
+        encoding = Encoding,
+        size = Size,
+        params = Params
+    },
+    case alley_services_mt:send(Req) of
+        {ok, Result} ->
+            ?log_debug("Got submit result: ~p", [Result]),
+            send_result(Result, St);
+        {error, Error} ->
+            ?log_error("Submit failed with: ~p", [Error]),
+            send_result(#send_result{result = Error}, St)
+    end.
+
+send_result(#send_result{
+    result = ok,
+    req_id = ReqId,
+    rejected = Rejected,
+    customer = Customer,
+    credit_left = _CreditLeft
+}, St) ->
+    {ok, ReqId, St};
+send_result(#send_result{result = Result}, St) ->
+    {error, "550 Send failed", St}.
 
 recover_to_cc_bcc(All, Headers) ->
     To = parse_addresses(proplists:get_value(<<"to">>, Headers, [])),
@@ -278,6 +321,59 @@ filter_recipients_using_domains([E|Es], Domains, Acc) ->
         false ->
             filter_recipients_using_domains(Es, Domains, Acc)
     end.
+
+authenticate_from_address(St) ->
+    {error, not_implemented}.
+
+authenticate_subject(St) ->
+    Subject = proplists:get_value(<<"subject">>, St#st.headers),
+    case binary:split(Subject, <<":">>, [global]) of
+        [CustomerId, UserId, Password] ->
+            ?log_debug("CustomerId: ~p, UserId: ~p, Password: ~p",
+                [CustomerId, UserId, Password]),
+                case alley_services_auth:authenticate(CustomerId, UserId, mm, Password) of
+                    {ok, #auth_resp_v1{result = #auth_customer_v1{} = Customer}} ->
+                        {ok, Customer};
+                    {ok, #auth_resp_v1{
+                        result = #auth_error_v1{code = Error}}
+                    } ->
+                        ?log_error("Got failed auth response with: ~p", [Error]),
+                        {error, Error};
+                    {error, Error} ->
+                        ?log_error("Auth failed with: ~p", [Error]),
+                        {error, Error}
+                end;
+        _ ->
+            {error, parse_subject}
+    end.
+
+authenticate_to_address(St) ->
+    {error, not_implemented}.
+
+common_smpp_params(Customer) ->
+    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
+    NoRetry = Customer#auth_customer_v1.no_retry,
+    Validity = alley_services_utils:fmt_validity(
+        Customer#auth_customer_v1.default_validity),
+    [
+        {registered_delivery, ReceiptsAllowed},
+        {service_type, <<>>},
+        {no_retry, NoRetry},
+        {validity_period, Validity},
+        {priority_flag, 0}
+    ].
+
+reformat_addr(undefined) ->
+    reformat_addr(<<"">>);
+reformat_addr(Addr = #addr{}) ->
+    Addr;
+reformat_addr(Addr) ->
+    alley_services_utils:addr_to_dto(Addr).
+
+reformat_addrs(undefined) ->
+    [];
+reformat_addrs(Addrs) ->
+    [alley_services_utils:addr_to_dto(Addr) || Addr <- Addrs].
 
 %% ===================================================================
 %% Begin Tests
