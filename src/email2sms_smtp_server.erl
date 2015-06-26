@@ -257,7 +257,7 @@ handle_data(send, St) ->
         customer = Customer,
         customer_uuid = CustomerUuid,
         user_id = UserId,
-        interface = mm,
+        interface = email,
         originator = reformat_addr(Originator),
         recipients = reformat_addrs(Recipients),
 
@@ -331,7 +331,7 @@ authenticate_subject(St) ->
         [CustomerId, UserId, Password] ->
             ?log_debug("CustomerId: ~p, UserId: ~p, Password: ~p",
                 [CustomerId, UserId, Password]),
-                case alley_services_auth:authenticate(CustomerId, UserId, mm, Password) of
+                case alley_services_auth:authenticate(CustomerId, UserId, email, Password) of
                     {ok, #auth_resp_v1{result = #auth_customer_v1{} = Customer}} ->
                         {ok, Customer};
                     {ok, #auth_resp_v1{
