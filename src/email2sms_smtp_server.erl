@@ -131,7 +131,7 @@ handle_DATA(From, To, Data, St) ->
     {Type, Subtype, Headers, Params, Content} = mimemail:decode(Data),
 
     %% lower case keys.
-    Headers2 = [{binstr:to_lower(K), V} || {K, V} <- Headers],
+    Headers2 = [{bstr:lower(K), V} || {K, V} <- Headers],
 
     %% use already cleaned up from.
     Headers3 = lists:keyreplace(<<"from">>, 1, Headers2, {<<"from">>, From}),
@@ -191,6 +191,7 @@ handle_data(filter_recipients, St) ->
         true ->
             handle_data(authenticate, St#st{recipients = Recipients})
     end;
+
 handle_data(authenticate, St) ->
     {ok, Schemes} = application:get_env(?APP, auth_schemes),
     Methods = [
@@ -226,6 +227,7 @@ handle_data(authenticate, St) ->
             },
             handle_data(decode_message, St2)
     end;
+
 handle_data(decode_message, St) ->
     Type    = St#st.type,
     Subtype = St#st.subtype,
@@ -241,10 +243,12 @@ handle_data(decode_message, St) ->
 
     case decode_message(Type, Subtype, Headers, Params, Content) of
         {ok, Message} ->
-            handle_data(send, St#st{message = Message});
+            Message2 = cleanup_message(Message),
+            handle_data(send, St#st{message = Message2});
         {error, Error} ->
             {error, Error, St}
     end;
+
 handle_data(send, St) ->
     {ok, InvalidRecipientPolicy} =
         application:get_env(?APP, invalid_recipient_policy),
@@ -415,6 +419,19 @@ decode_message(<<"multipart">> = Type, Subtype, Headers, Params, [C|Cs]) ->
 
 decode_message(_Type, _Subtype, _Headers, _Params, _Content) ->
     {error, unknown_content_type}.
+
+cleanup_message(Message) ->
+    cleanup_message(Message, [<<"----">>, <<"Disclaimer">>]).
+
+cleanup_message(Message, []) ->
+    bstr:strip(Message);
+cleanup_message(Message, [S|Ss]) ->
+    case binary:split(Message, S) of
+        [Message2|_] ->
+            cleanup_message(Message2, Ss);
+        Message ->
+            cleanup_message(Message, Ss)
+    end.
 
 %% ===================================================================
 %% Begin Tests
