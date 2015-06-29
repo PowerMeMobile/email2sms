@@ -47,7 +47,8 @@
     content :: term(),
     recipients :: [email()],
     auth_schema :: auth_schema(),
-    customer :: #auth_customer_v1{}
+    customer :: #auth_customer_v1{},
+    message :: binary()
 }).
 
 %% ===================================================================
@@ -141,15 +142,6 @@ handle_DATA(From, To, Data, St) ->
     Headers5 = lists:keyreplace(<<"cc">>, 1, Headers4, {<<"cc">>, Cc}),
     Headers6 = [{<<"bcc">>, Bcc} | Headers5],
 
-    ?log_debug("~p", [Type]),
-    ?log_debug("~p", [Subtype]),
-    ?log_debug("~p", [Headers2]),
-    ?log_debug("~p", [Headers6]),
-    %?log_debug("~p", [Params]),
-    %?log_debug("~p", [Content]),
-
-    %ContentType = <<Type/binary, "/", Subtype/binary>>,
-
     St2 = St#st{
         type = Type,
         subtype = Subtype,
@@ -232,12 +224,27 @@ handle_data(authenticate, St) ->
                 auth_schema = Schema,
                 customer = Customer
             },
-            handle_data(check_coverage, St2)
+            handle_data(decode_message, St2)
     end;
-handle_data(check_coverage, St) ->
-    handle_data(prepare_body, St);
-handle_data(prepare_body, St) ->
-    handle_data(send, St);
+handle_data(decode_message, St) ->
+    Type    = St#st.type,
+    Subtype = St#st.subtype,
+    Headers = St#st.headers,
+    Params  = St#st.params,
+    Content = St#st.content,
+
+    ?log_debug("~p", [Type]),
+    ?log_debug("~p", [Subtype]),
+    ?log_debug("~p", [Headers]),
+    ?log_debug("~p", [Params]),
+    ?log_debug("~p", [Content]),
+
+    case decode_message(Type, Subtype, Headers, Params, Content) of
+        {ok, Message} ->
+            handle_data(send, St#st{message = Message});
+        {error, Error} ->
+            {error, Error, St}
+    end;
 handle_data(send, St) ->
     {ok, InvalidRecipientPolicy} =
         application:get_env(?APP, invalid_recipient_policy),
@@ -247,8 +254,7 @@ handle_data(send, St) ->
     UserId = Customer#auth_customer_v1.user_id,
     Originator = Customer#auth_customer_v1.default_source,
     Recipients = St#st.recipients,
-
-    Message = <<"Hello from Email">>,
+    Message = St#st.message,
 
     {ok, Encoding} = alley_services_utils:guess_encoding(Message),
     Size = alley_services_utils:chars_size(Encoding, Message),
@@ -379,6 +385,36 @@ reformat_addrs(undefined) ->
     [];
 reformat_addrs(Addrs) ->
     [alley_services_utils:addr_to_dto(Addr) || Addr <- Addrs].
+
+decode_message(<<"text">>, <<"plain">>, _Headers, _Params, Content) ->
+    {ok, Content};
+
+decode_message(<<"text">>, <<"html">>, _Headers, _Params, Content) ->
+    Content2 = re:replace(Content, "<[^>]*>", "", [global, {return, list}]),
+    %?log_debug("~p", [Content2]),
+    Content3 = re:replace(Content2, "\\s+", "", [global, {return, list}]),
+    %?log_debug("~p", [Content3]),
+    Content4 = http_uri:decode(Content3),
+    %?log_debug("~p", [Content4]),
+    {ok, list_to_binary(Content4)};
+
+decode_message(<<"multipart">>, _, _, _, []) ->
+    {error, unknown_content_type};
+decode_message(<<"multipart">> = Type, Subtype, Headers, Params, [C|Cs]) ->
+    ?log_debug("~p", [C]),
+
+    {CType, CSubtype, CHeaders, CParams, CContent} = C,
+
+    case decode_message(CType, CSubtype, CHeaders, CParams, CContent) of
+        {ok, Message} ->
+            {ok, Message};
+        {error, Error} ->
+            ?log_debug("decode_message failed with: ~p", [Error]),
+            decode_message(Type, Subtype, Headers, Params, Cs)
+    end;
+
+decode_message(_Type, _Subtype, _Headers, _Params, _Content) ->
+    {error, unknown_content_type}.
 
 %% ===================================================================
 %% Begin Tests
