@@ -406,9 +406,7 @@ decode_message(<<"multipart">>, _, _, _, []) ->
     {error, unknown_content_type};
 decode_message(<<"multipart">> = Type, Subtype, Headers, Params, [C|Cs]) ->
     ?log_debug("~p", [C]),
-
     {CType, CSubtype, CHeaders, CParams, CContent} = C,
-
     case decode_message(CType, CSubtype, CHeaders, CParams, CContent) of
         {ok, Message} ->
             {ok, Message};
