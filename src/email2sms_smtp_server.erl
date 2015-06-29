@@ -239,6 +239,9 @@ handle_data(check_coverage, St) ->
 handle_data(prepare_body, St) ->
     handle_data(send, St);
 handle_data(send, St) ->
+    {ok, InvalidRecipientPolicy} =
+        application:get_env(?APP, invalid_recipient_policy),
+
     Customer = St#st.customer,
     CustomerUuid = Customer#auth_customer_v1.customer_uuid,
     UserId = Customer#auth_customer_v1.user_id,
@@ -265,7 +268,9 @@ handle_data(send, St) ->
         message = Message,
         encoding = Encoding,
         size = Size,
-        params = Params
+        params = Params,
+
+        invalid_recipient_policy = InvalidRecipientPolicy
     },
     case alley_services_mt:send(Req) of
         {ok, Result} ->
