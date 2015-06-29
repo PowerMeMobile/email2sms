@@ -315,8 +315,8 @@ handle_data(send, St) ->
 send_result(#send_result{
     result = ok,
     req_id = ReqId,
-    rejected = Rejected,
-    customer = Customer,
+    rejected = _Rejected,
+    customer = _Customer,
     credit_left = _CreditLeft
 }, St) ->
     {ok, ReqId, St};
