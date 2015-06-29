@@ -48,7 +48,9 @@
     recipients :: [email()],
     auth_schema :: auth_schema(),
     customer :: #auth_customer_v1{},
-    message :: binary()
+    message :: binary(),
+    encoding :: default | ucs2,
+    size :: pos_integer()
 }).
 
 %% ===================================================================
@@ -244,9 +246,28 @@ handle_data(decode_message, St) ->
     case decode_message(Type, Subtype, Headers, Params, Content) of
         {ok, Message} ->
             Message2 = cleanup_message(Message),
-            handle_data(send, St#st{message = Message2});
-        {error, Error} ->
-            {error, Error, St}
+            {ok, Encoding} = alley_services_utils:guess_encoding(Message),
+            handle_data(check_parts_count, St#st{
+                message = Message2,
+                encoding = Encoding
+            });
+        {error, unknown_content_type} ->
+            {error, ?E_UNKNOWN_CONTENT_TYPE, St}
+    end;
+
+handle_data(check_parts_count, St) ->
+    {ok, MaxMsgParts} =
+        application:get_env(?APP, max_msg_parts),
+
+    Message = St#st.message,
+    Encoding = St#st.encoding,
+    Size = alley_services_utils:chars_size(Encoding, Message),
+    MsgParts = alley_services_utils:calc_parts_number(Size, Encoding),
+    case MsgParts =< MaxMsgParts of
+        true ->
+            handle_data(send, St#st{size = Size});
+        false ->
+            {error, ?E_TOO_MANY_PARTS, St}
     end;
 
 handle_data(send, St) ->
@@ -259,9 +280,9 @@ handle_data(send, St) ->
     Originator = Customer#auth_customer_v1.default_source,
     Recipients = St#st.recipients,
     Message = St#st.message,
+    Encoding = St#st.encoding,
+    Size = St#st.size,
 
-    {ok, Encoding} = alley_services_utils:guess_encoding(Message),
-    Size = alley_services_utils:chars_size(Encoding, Message),
     Params = common_smpp_params(Customer) ++ [
         {esm_class, 3},
         {protocol_id, 0}
