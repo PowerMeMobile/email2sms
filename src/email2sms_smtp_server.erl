@@ -130,24 +130,22 @@ handle_RCPT_extension(Extension, _St) ->
 handle_DATA(From, To, Data, St) ->
     ?log_debug("Got an email (from: ~p, to: ~p)", [From, To]),
 
-    {Type, Subtype, Headers, Params, Content} = mimemail:decode(Data),
-
-    %% lower case keys.
-    Headers2 = [{bstr:lower(K), V} || {K, V} <- Headers],
+    {Type, Subtype, Headers, Params, Content} =
+        lower_case(mimemail:decode(Data)),
 
     %% use already cleaned up from.
-    Headers3 = lists:keyreplace(<<"from">>, 1, Headers2, {<<"from">>, From}),
+    Headers2 = lists:keyreplace(<<"from">>, 1, Headers, {<<"from">>, From}),
 
     %% cleanup to, cc and recover bcc.
-    {To2, Cc, Bcc} = recover_to_cc_bcc(To, Headers3),
-    Headers4 = lists:keyreplace(<<"to">>, 1, Headers3, {<<"to">>, To2}),
-    Headers5 = lists:keyreplace(<<"cc">>, 1, Headers4, {<<"cc">>, Cc}),
-    Headers6 = [{<<"bcc">>, Bcc} | Headers5],
+    {To2, Cc, Bcc} = recover_to_cc_bcc(To, Headers2),
+    Headers3 = lists:keyreplace(<<"to">>, 1, Headers2, {<<"to">>, To2}),
+    Headers4 = lists:keyreplace(<<"cc">>, 1, Headers3, {<<"cc">>, Cc}),
+    Headers5 = [{<<"bcc">>, Bcc} | Headers4],
 
     St2 = St#st{
         type = Type,
         subtype = Subtype,
-        headers = Headers6,
+        headers = Headers5,
         params = Params,
         content = Content
     },
@@ -177,6 +175,17 @@ terminate(Reason, St) ->
 %% ===================================================================
 %% Internal
 %% ===================================================================
+
+lower_case({Type, Subtype, Headers, Params, Content})
+        when Type =:= <<"multipart">> ->
+    Headers2 = [{bstr:lower(K), V} || {K, V} <- Headers],
+    Params2 =  [{bstr:lower(K), V} || {K, V} <- Params],
+    Content2 = [lower_case(C) || C <- Content],
+    {Type, Subtype, Headers2, Params2, Content2};
+lower_case({Type, Subtype, Headers, Params, Content}) ->
+    Headers2 = [{bstr:lower(K), V} || {K, V} <- Headers],
+    Params2 =  [{bstr:lower(K), V} || {K, V} <- Params],
+    {Type, Subtype, Headers2, Params2, Content}.
 
 handle_data(filter_recipients, St) ->
     {ok, Fields} = application:get_env(?APP, smtp_recipient_fields),
