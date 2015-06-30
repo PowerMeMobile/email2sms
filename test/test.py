@@ -4,6 +4,8 @@ import pytest
 import os
 
 import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 EMAIL_HOST = os.getenv('EMAIL_HOST')
 if EMAIL_HOST == None or EMAIL_HOST == '':
@@ -39,8 +41,6 @@ Subject: %s
     assert {} == res
 
 def test_subject_text_plain_us_ascii(smtp):
-    from email.mime.text import MIMEText
-
     msg = MIMEText('text/plain us-ascii')
     msg['From'] = FROM_UNKNOWN
     msg['To'] = ','.join(TO)
@@ -50,8 +50,6 @@ def test_subject_text_plain_us_ascii(smtp):
     assert {} == res
 
 def test_subject_text_plain_utf_8(smtp):
-    from email.mime.text import MIMEText
-
     msg = MIMEText('Привет, как дела?', _charset='utf-8')
     msg['From'] = FROM_UNKNOWN
     msg['To'] = ','.join(TO)
@@ -61,8 +59,6 @@ def test_subject_text_plain_utf_8(smtp):
     assert {} == res
 
 def test_subject_text_html(smtp):
-    from email.mime.text import MIMEText
-
     html = """\
 <html>
   <head></head>
@@ -81,9 +77,6 @@ def test_subject_text_html(smtp):
     assert {} == res
 
 def test_subject_multipart_alternative(smtp):
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
-
     msg = MIMEMultipart('alternative')
     msg['From'] = FROM_UNKNOWN
     msg['To'] = ','.join(TO)
@@ -132,8 +125,6 @@ def test_from_address_text_plain_us_ascii(smtp):
     assert {} == res
 
 def test_unknown_user_fail(smtp):
-    from email.mime.text import MIMEText
-
     msg = MIMEText('text/plain us-ascii')
     msg['From'] = FROM_UNKNOWN
     msg['To'] = ','.join(TO)
