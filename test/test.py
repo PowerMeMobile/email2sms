@@ -3,6 +3,8 @@
 import pytest
 import os
 
+import smtplib
+
 EMAIL_HOST = os.getenv('EMAIL_HOST')
 if EMAIL_HOST == None or EMAIL_HOST == '':
     EMAIL_HOST = '127.0.0.1'
@@ -18,7 +20,6 @@ SUBJECT = '10009:user:password'
 
 @pytest.fixture
 def smtp():
-    import smtplib
     smtp = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
     resp, _msg = smtp.ehlo()
     assert resp == 250
@@ -129,3 +130,16 @@ def test_from_address_text_plain_us_ascii(smtp):
 
     res = smtp.sendmail(msg['From'], msg['To'], msg.as_string())
     assert {} == res
+
+def test_unknown_user_fail(smtp):
+    from email.mime.text import MIMEText
+
+    msg = MIMEText('text/plain us-ascii')
+    msg['From'] = FROM_UNKNOWN
+    msg['To'] = ','.join(TO)
+
+    try:
+        smtp.sendmail(msg['From'], msg['To'], msg.as_string())
+    except smtplib.SMTPDataError as (code, resp):
+        assert code == 550
+        assert resp == 'Invalid user account'

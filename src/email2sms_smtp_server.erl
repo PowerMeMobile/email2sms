@@ -165,8 +165,8 @@ handle_VRFY(Address, St) ->
     {error, "252 VRFY disabled", St}.
 
 handle_other(Verb, Arg, St) ->
-    ?log_info("Unrecognized other command (Verb: ~s, Arg: ~s)", [Verb, Arg]),
-    {error, ?E_NOT_RECOGNIZED, St}.
+    ?log_info("Unrecognized other command (Verb: ~p, Arg: ~p)", [Verb, Arg]),
+    {?E_NOT_RECOGNIZED, St}.
 
 code_change(_OldVsn, St, _Extra) ->
     {ok, St}.
@@ -383,7 +383,7 @@ authenticate_from_address(St) ->
 
 authenticate_subject(St) ->
     ?log_debug("Auth schema: subject", []),
-    Subject = proplists:get_value(<<"subject">>, St#st.headers),
+    Subject = proplists:get_value(<<"subject">>, St#st.headers, <<>>),
     case binary:split(Subject, <<":">>, [global]) of
         [CustomerId, UserId, Password] ->
             ?log_debug("CustomerId: ~p, UserId: ~p, Password: ~p",
