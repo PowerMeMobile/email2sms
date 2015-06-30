@@ -2,4 +2,9 @@ deps/*
 ebin/*
 priv/*
 rel/email2sms/
+.eunit/
+test/__pycache__/
+test/env/
+test/*.pyc
+test/*ipynb*
 TAGS
