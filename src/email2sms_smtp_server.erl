@@ -142,6 +142,11 @@ handle_DATA(From, To, Data, St) ->
     Headers4 = lists:keyreplace(<<"cc">>, 1, Headers3, {<<"cc">>, Cc}),
     Headers5 = [{<<"bcc">>, Bcc} | Headers4],
 
+    ?log_debug("~p/~p", [Type, Subtype]),
+    ?log_debug("~p", [Headers5]),
+    ?log_debug("~p", [Params]),
+    ?log_debug("~p", [Content]),
+
     St2 = St#st{
         type = Type,
         subtype = Subtype,
@@ -218,7 +223,7 @@ handle_data(authenticate, St) ->
                         {ok, Customer} ->
                             {Schema, Customer};
                         {error, Reason} ->
-                            ?log_debug("Authentication schema: ~p failed with: ~p",
+                            ?log_debug("Auth schema: ~p failed with: ~p",
                                 [Schema, Reason]),
                             next_schema
                     end;
@@ -245,12 +250,6 @@ handle_data(decode_message, St) ->
     Headers = St#st.headers,
     Params  = St#st.params,
     Content = St#st.content,
-
-    ?log_debug("~p/~p", [Type, Subtype]),
-    ?log_debug("~p", [Headers]),
-    ?log_debug("~p", [Params]),
-    ?log_debug("~p", [Content]),
-
     case decode_message(Type, Subtype, Headers, Params, Content) of
         {ok, Message} ->
             Message2 = cleanup_message(Message),
@@ -367,9 +366,23 @@ filter_recipients_using_domains([E|Es], Domains, Acc) ->
     end.
 
 authenticate_from_address(St) ->
-    {error, not_implemented}.
+    ?log_debug("Auth schema: from_address", []),
+    From = proplists:get_value(<<"from">>, St#st.headers),
+    case alley_services_auth:authenticate_by_email(From, email) of
+        {ok, #auth_resp_v2{result = #auth_customer_v1{} = Customer}} ->
+            {ok, Customer};
+        {ok, #auth_resp_v2{
+            result = #auth_error_v2{code = Error}}
+        } ->
+            ?log_error("Got failed auth response with: ~p", [Error]),
+            {error, Error};
+        {error, Error} ->
+            ?log_error("Auth failed with: ~p", [Error]),
+            {error, Error}
+    end.
 
 authenticate_subject(St) ->
+    ?log_debug("Auth schema: subject", []),
     Subject = proplists:get_value(<<"subject">>, St#st.headers),
     case binary:split(Subject, <<":">>, [global]) of
         [CustomerId, UserId, Password] ->
@@ -391,7 +404,8 @@ authenticate_subject(St) ->
             {error, parse_subject}
     end.
 
-authenticate_to_address(St) ->
+authenticate_to_address(_St) ->
+    ?log_debug("Auth schema: to_address", []),
     {error, not_implemented}.
 
 common_smpp_params(Customer) ->
