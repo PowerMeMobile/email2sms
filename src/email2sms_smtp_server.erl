@@ -246,8 +246,7 @@ handle_data(decode_message, St) ->
     Params  = St#st.params,
     Content = St#st.content,
 
-    ?log_debug("~p", [Type]),
-    ?log_debug("~p", [Subtype]),
+    ?log_debug("~p/~p", [Type, Subtype]),
     ?log_debug("~p", [Headers]),
     ?log_debug("~p", [Params]),
     ?log_debug("~p", [Content]),
