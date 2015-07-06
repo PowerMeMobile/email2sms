@@ -47,7 +47,7 @@
     content :: term(),
     recipients :: [email()],
     auth_schema :: auth_schema(),
-    customer :: #auth_customer_v1{},
+    customer :: #auth_customer_v1{} | [#auth_customer_v1{}],
     message :: binary(),
     encoding :: default | ucs2,
     size :: pos_integer()
@@ -220,8 +220,8 @@ handle_data(authenticate, St) ->
             case lists:member(Schema, Schemes) of
                 true ->
                     case Method(St) of
-                        {ok, Customer} ->
-                            {Schema, Customer};
+                        {ok, Result} ->
+                            {Schema, Result};
                         {error, Reason} ->
                             ?log_debug("Auth schema: ~p failed with: ~p",
                                 [Schema, Reason]),
@@ -230,12 +230,19 @@ handle_data(authenticate, St) ->
                 false ->
                     next_schema
             end;
-        ({_, _}, {Schema, Customer}) ->
-            {Schema, Customer}
+        ({_, _}, {Schema, Result}) ->
+            {Schema, Result}
     end,
     case lists:foldl(Fun, next_schema, Methods) of
         next_schema ->
             {error, ?E_AUTHENTICATION, St};
+        {Schema, {Customers, BadRecipients}} ->
+            St2 = St#st{
+                auth_schema = Schema,
+                customer = Customers,
+                recipients = St#st.recipients -- BadRecipients
+            },
+            handle_data(decode_message, St2);
         {Schema, Customer} ->
             St2 = St#st{
                 auth_schema = Schema,
@@ -277,15 +284,35 @@ handle_data(check_parts_count, St) ->
             {error, ?E_TOO_MANY_PARTS, St}
     end;
 
+handle_data(send, St) when St#st.auth_schema =:= to_address ->
+    Cs = St#st.customer,
+    Rs = St#st.recipients,
+    Res = [send_message(C, [R], St) || {C, R} <- lists:zip(Cs, Rs)],
+    ReqIds = [ReqId || {ok, #send_result{result = ok, req_id = ReqId}} <- Res],
+    case ReqIds of
+        [] ->
+            send_result(#send_result{result = send_failed}, St);
+        _ ->
+            ReqIds2 = bstr:join(ReqIds, <<",">>),
+            send_result(#send_result{result = ok, req_id = ReqIds2}, St)
+    end;
 handle_data(send, St) ->
+    Customer = St#st.customer,
+    Recipients = St#st.recipients,
+    case send_message(Customer, Recipients, St) of
+        {ok, Result} ->
+            send_result(Result, St);
+        {error, Error} ->
+            send_result(#send_result{result = Error}, St)
+    end.
+
+send_message(Customer, Recipients, St) ->
     {ok, InvalidRecipientPolicy} =
         application:get_env(?APP, invalid_recipient_policy),
 
-    Customer = St#st.customer,
     CustomerUuid = Customer#auth_customer_v1.customer_uuid,
     UserId = Customer#auth_customer_v1.user_id,
     Originator = Customer#auth_customer_v1.default_source,
-    Recipients = St#st.recipients,
     Message = St#st.message,
     Encoding = St#st.encoding,
     Size = St#st.size,
@@ -313,22 +340,16 @@ handle_data(send, St) ->
     case alley_services_mt:send(Req) of
         {ok, Result} ->
             ?log_debug("Got submit result: ~p", [Result]),
-            send_result(Result, St);
+            {ok, Result};
         {error, Error} ->
             ?log_error("Submit failed with: ~p", [Error]),
-            send_result(#send_result{result = Error}, St)
+            {error, Error}
     end.
 
-send_result(#send_result{
-    result = ok,
-    req_id = ReqId,
-    rejected = _Rejected,
-    customer = _Customer,
-    credit_left = _CreditLeft
-}, St) ->
+send_result(#send_result{result = ok, req_id = ReqId}, St) ->
     {ok, ReqId, St};
 send_result(#send_result{result = Result}, St) ->
-    {error, "550 Send failed", St}.
+    {error, email2sms_errors:format_error(Result), St}.
 
 recover_to_cc_bcc(All, Headers) ->
     To = parse_addresses(proplists:get_value(<<"to">>, Headers, [])),
@@ -402,7 +423,18 @@ authenticate_subject(St) ->
 
 authenticate_to_address(St) ->
     ?log_debug("Auth schema: to_address", []),
-    [To|_] = proplists:get_value(<<"to">>, St#st.headers),
+    Tos = proplists:get_value(<<"to">>, St#st.headers),
+    Res = [{To, authenticate_by_msisdn(To)} || To <- Tos],
+    Customers = [C || {_R, {ok, #auth_customer_v1{} = C}} <- Res],
+    BadRecipients = [R || {R, {error, _}} <- Res],
+    case Customers of
+        [] ->
+            {error, no_recipients};
+        _ ->
+            {ok, {Customers, BadRecipients}}
+    end.
+
+authenticate_by_msisdn(To) ->
     [Addr, _Domain] = binary:split(To, <<"@">>),
     Msisdn = reformat_addr(Addr),
     case alley_services_auth:authenticate_by_msisdn(Msisdn, email) of

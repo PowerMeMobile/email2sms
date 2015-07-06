@@ -19,6 +19,8 @@ format_error(timeout) ->
     ?E_TIMEOUT;
 format_error(server_busy) ->
     ?E_SERVER_BUSY;
+format_error(send_failed) ->
+    ?E_SEND_FAILED;
 format_error(Error) when is_atom(Error) ->
     atom_to_list(Error);
 format_error(Error) when is_binary(Error) ->

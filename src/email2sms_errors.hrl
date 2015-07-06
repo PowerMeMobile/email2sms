@@ -11,5 +11,6 @@
 -define(E_NOT_RECOGNIZED,       "500 Not recognized").
 -define(E_TOO_MANY_PARTS,       "550 Too many SMS parts").
 -define(E_UNKNOWN_CONTENT_TYPE, "550 Unknown content type").
+-define(E_SEND_FAILED,          "550 Send failed").
 
 -endif.
