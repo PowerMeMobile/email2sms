@@ -423,9 +423,8 @@ authenticate_subject(St) ->
 
 authenticate_to_address(St) ->
     ?log_debug("Auth schema: to_address", []),
-    Tos = proplists:get_value(<<"to">>, St#st.headers),
-    Addrs = [hd(binary:split(To, <<"@">>)) || To <- Tos],
-    Res = [{A, authenticate_by_msisdn(A)} || A <- Addrs],
+    Recipients = St#st.recipients,
+    Res = [{R, authenticate_by_msisdn(R)} || R <- Recipients],
     Customers = [C || {_R, {ok, #auth_customer_v1{} = C}} <- Res],
     BadRecipients = [R || {R, {error, _}} <- Res],
     case Customers of
