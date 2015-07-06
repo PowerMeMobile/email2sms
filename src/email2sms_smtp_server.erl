@@ -424,7 +424,8 @@ authenticate_subject(St) ->
 authenticate_to_address(St) ->
     ?log_debug("Auth schema: to_address", []),
     Tos = proplists:get_value(<<"to">>, St#st.headers),
-    Res = [{To, authenticate_by_msisdn(To)} || To <- Tos],
+    Addrs = [hd(binary:split(To, <<"@">>)) || To <- Tos],
+    Res = [{A, authenticate_by_msisdn(A)} || A <- Addrs],
     Customers = [C || {_R, {ok, #auth_customer_v1{} = C}} <- Res],
     BadRecipients = [R || {R, {error, _}} <- Res],
     case Customers of
@@ -434,8 +435,7 @@ authenticate_to_address(St) ->
             {ok, {Customers, BadRecipients}}
     end.
 
-authenticate_by_msisdn(To) ->
-    [Addr, _Domain] = binary:split(To, <<"@">>),
+authenticate_by_msisdn(Addr) ->
     Msisdn = reformat_addr(Addr),
     case alley_services_auth:authenticate_by_msisdn(Msisdn, email) of
         {ok, #auth_resp_v2{result = #auth_customer_v1{} = Customer}} ->
