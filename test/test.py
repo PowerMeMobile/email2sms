@@ -19,6 +19,7 @@ FROM_KNOWN = 'email-postpaid@mail.com'
 FROM_UNKNOWN = 'whoever@mail.com'
 TO = ['375296543210@mail.com', '375296543211@mail.com']
 SUBJECT = '10009:user:password'
+TO_ADDRESS = '375296660009@mail.com'
 
 @pytest.fixture
 def smtp():
@@ -102,9 +103,6 @@ def test_subject_multipart_alternative(smtp):
     assert {} == res
 
 def test_subject_multipart_mixed(smtp):
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
-
     msg = MIMEMultipart()
     msg['From'] = FROM_UNKNOWN
     msg['To'] = ','.join(TO)
@@ -115,11 +113,17 @@ def test_subject_multipart_mixed(smtp):
     assert {} == res
 
 def test_from_address_text_plain_us_ascii(smtp):
-    from email.mime.text import MIMEText
-
     msg = MIMEText('text/plain us-ascii')
     msg['From'] = FROM_KNOWN
     msg['To'] = ','.join(TO)
+
+    res = smtp.sendmail(msg['From'], msg['To'], msg.as_string())
+    assert {} == res
+
+def test_to_address_text_plain_us_ascii(smtp):
+    msg = MIMEText('text/plain us-ascii')
+    msg['From'] = FROM_UNKNOWN
+    msg['To'] = TO_ADDRESS
 
     res = smtp.sendmail(msg['From'], msg['To'], msg.as_string())
     assert {} == res

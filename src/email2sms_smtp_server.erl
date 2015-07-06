@@ -371,9 +371,7 @@ authenticate_from_address(St) ->
     case alley_services_auth:authenticate_by_email(From, email) of
         {ok, #auth_resp_v2{result = #auth_customer_v1{} = Customer}} ->
             {ok, Customer};
-        {ok, #auth_resp_v2{
-            result = #auth_error_v2{code = Error}}
-        } ->
+        {ok, #auth_resp_v2{result = #auth_error_v2{code = Error}}} ->
             ?log_error("Got failed auth response with: ~p", [Error]),
             {error, Error};
         {error, Error} ->
@@ -388,12 +386,10 @@ authenticate_subject(St) ->
         [CustomerId, UserId, Password] ->
             ?log_debug("CustomerId: ~p, UserId: ~p, Password: ~p",
                 [CustomerId, UserId, Password]),
-                case alley_services_auth:authenticate(CustomerId, UserId, email, Password) of
-                    {ok, #auth_resp_v1{result = #auth_customer_v1{} = Customer}} ->
+                case alley_services_auth:authenticate(CustomerId, UserId, Password, email) of
+                    {ok, #auth_resp_v2{result = #auth_customer_v1{} = Customer}} ->
                         {ok, Customer};
-                    {ok, #auth_resp_v1{
-                        result = #auth_error_v1{code = Error}}
-                    } ->
+                    {ok, #auth_resp_v2{result = #auth_error_v2{code = Error}}} ->
                         ?log_error("Got failed auth response with: ~p", [Error]),
                         {error, Error};
                     {error, Error} ->
@@ -404,9 +400,21 @@ authenticate_subject(St) ->
             {error, parse_subject}
     end.
 
-authenticate_to_address(_St) ->
+authenticate_to_address(St) ->
     ?log_debug("Auth schema: to_address", []),
-    {error, not_implemented}.
+    [To|_] = proplists:get_value(<<"to">>, St#st.headers),
+    [Addr, _Domain] = binary:split(To, <<"@">>),
+    Msisdn = reformat_addr(Addr),
+    case alley_services_auth:authenticate_by_msisdn(Msisdn, email) of
+        {ok, #auth_resp_v2{result = #auth_customer_v1{} = Customer}} ->
+            {ok, Customer};
+        {ok, #auth_resp_v2{result = #auth_error_v2{code = Error}}} ->
+            ?log_error("Got failed auth response with: ~p", [Error]),
+            {error, Error};
+        {error, Error} ->
+            ?log_error("Auth failed with: ~p", [Error]),
+            {error, Error}
+    end.
 
 common_smpp_params(Customer) ->
     ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
