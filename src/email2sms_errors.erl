@@ -25,8 +25,6 @@ format_error(server_busy) ->
     ?E_SERVER_BUSY;
 format_error(send_failed) ->
     ?E_SEND_FAILED;
-format_error(invalid_recipient_policy) ->
-    ?E_INVALID_RECIPIENT_POLICY;
 format_error(credit_limit_exceeded) ->
     ?E_CREDIT_LIMIT_EXCEEDED;
 format_error(Error) when is_atom(Error) ->
