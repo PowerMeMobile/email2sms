@@ -96,10 +96,10 @@ init(Domain, SessionCount, PeerAddr, _Options) ->
             {stop, normal, ?E_SERVER_BUSY}
     end.
 
-handle_HELO(_Peername, St) ->
+handle_HELO(_Hostname, St) ->
     {ok, St}.
 
-handle_EHLO(_Peername, Extensions, St) ->
+handle_EHLO(_Hostname, Extensions, St) ->
     {ok, MaxMsgSize} = application:get_env(?APP, smtp_max_msg_size),
     Extensions2 =
         case MaxMsgSize of
@@ -357,8 +357,8 @@ recover_to_cc_bcc(All, Headers) ->
     Bcc = (All -- To) -- Cc,
     {To, Cc, Bcc}.
 
-%% get rid of possible names in form `"name" <address@host.domain>'
-%% variations. only return `address@host.domain' parts
+%% get rid of possible names in form `"name" <address@domain>'
+%% variations. only return `address@domain' parts
 parse_addresses(AddrsRaw) ->
     {ok, AddrsParsed} = smtp_util:parse_rfc822_addresses(AddrsRaw),
     [list_to_binary(Addr) || {_Name, Addr} <- AddrsParsed].
