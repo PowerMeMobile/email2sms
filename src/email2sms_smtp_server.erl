@@ -381,8 +381,11 @@ handle_data(check_invalid_recipient_policy, St) ->
 
 handle_data(send, St) when St#st.auth_schema =:= to_address ->
     Cs = St#st.customer,
-    Rs = St#st.recipients,
-    Res = [send_message(C, [R], St) || {C, R} <- lists:zip(Cs, Rs)],
+    Rs = [msisdn_from_email(R) || R <- St#st.recipients],
+    Msg = St#st.message,
+    Enc = St#st.encoding,
+    Size = St#st.size,
+    Res = [send_message(C, [R], Msg, Enc, Size) || {C, R} <- lists:zip(Cs, Rs)],
     ReqIds = [ReqId || {ok, #send_result{result = ok, req_id = ReqId}} <- Res],
     case ReqIds of
         [] ->
@@ -393,8 +396,11 @@ handle_data(send, St) when St#st.auth_schema =:= to_address ->
     end;
 handle_data(send, St) ->
     Customer = St#st.customer,
-    Recipients = St#st.recipients,
-    case send_message(Customer, Recipients, St) of
+    Recipients = [msisdn_from_email(R) || R <- St#st.recipients],
+    Msg = St#st.message,
+    Enc = St#st.encoding,
+    Size = St#st.size,
+    case send_message(Customer, Recipients, Msg, Enc, Size) of
         {ok, Result} ->
             send_result(Result, St);
         {error, Error} ->
@@ -417,13 +423,10 @@ is_recipient_routable(Email, CoverageTab) ->
             true
     end.
 
-send_message(Customer, Recipients, St) ->
+send_message(Customer, Recipients, Message, Encoding, Size) ->
     CustomerUuid = Customer#auth_customer_v1.customer_uuid,
     UserId = Customer#auth_customer_v1.user_id,
     Originator = Customer#auth_customer_v1.default_source,
-    Message = St#st.message,
-    Encoding = St#st.encoding,
-    Size = St#st.size,
 
     Params = common_smpp_params(Customer) ++ [
         {esm_class, 3},
@@ -434,8 +437,8 @@ send_message(Customer, Recipients, St) ->
         customer_uuid = CustomerUuid,
         user_id = UserId,
         interface = email,
-        originator = reformat_addr(Originator),
-        recipients = reformat_addrs(Recipients),
+        originator = Originator,
+        recipients = Recipients,
 
         req_type = single,
         message = Message,
@@ -576,11 +579,6 @@ reformat_addr(Addr = #addr{}) ->
     Addr;
 reformat_addr(Addr) ->
     alley_services_utils:addr_to_dto(Addr).
-
-reformat_addrs(undefined) ->
-    [];
-reformat_addrs(Addrs) ->
-    [alley_services_utils:addr_to_dto(Addr) || Addr <- Addrs].
 
 decode_message(<<"text">>, <<"plain">>, _Headers, _Params, Content) ->
     {ok, Content};
