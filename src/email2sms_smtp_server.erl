@@ -90,7 +90,8 @@ init(Domain, SessionCount, PeerAddr, _Options) ->
     case SessionCount > MaxSessionCount of
         false ->
             {ok, Greeting} = application:get_env(?APP, smtp_greeting),
-            Banner = [Domain, " ESMTP ", Greeting],
+            {ok, Vsn} = application:get_key(?APP, vsn),
+            Banner = [Domain, " ESMTP ", Greeting, " ", Vsn],
             {ok, Banner, #st{}};
         true ->
             ?log_error("Max session count exceeded: ~p", [SessionCount]),
