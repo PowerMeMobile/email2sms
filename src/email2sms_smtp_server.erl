@@ -504,7 +504,13 @@ notify_rejected(OrigSender, OrigMsgId, RejectedAddrs) ->
               RejectedAddrs2/binary>>
         })
     },
-    gen_smtp_client:send(Email, Opts).
+    Callback =
+        fun({ok, Res}) ->
+            ?log_debug("Notify succeeded with: ~p", [Res]);
+           (Error) ->
+            ?log_error("Notify failed with: ~p", [Error])
+        end,
+    gen_smtp_client:send(Email, Opts, Callback).
 
 recover_to_cc_bcc(All, Headers) ->
     To = parse_addresses(proplists:get_value(<<"to">>, Headers, [])),
