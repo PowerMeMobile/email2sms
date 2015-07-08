@@ -377,6 +377,8 @@ handle_data(check_invalid_recipient_policy, St) ->
             ?log_error("Message rejected by reject_message policy", []),
             {error, ?E_INVALID_RECIPIENT_POLICY, St};
         ignore_invalid ->
+            handle_data(send, St);
+        notify_invalid ->
             handle_data(send, St)
     end;
 
@@ -457,9 +459,52 @@ send_message(Customer, Recipients, Message, Encoding, Size) ->
     end.
 
 send_result(#send_result{result = ok, req_id = ReqId}, St) ->
+    {ok, InvalidRecipientPolicy} =
+        application:get_env(?APP, invalid_recipient_policy),
+
+    case InvalidRecipientPolicy of
+        ignore_invalid ->
+            nop;
+        notify_invalid ->
+            All = St#st.all_recipients,
+            Accepted = St#st.recipients,
+            Rejected = All -- Accepted,
+            if
+                length(Rejected) > 0 ->
+                    From = proplists:get_value(<<"from">>, St#st.headers),
+                    MsgId = proplists:get_value(<<"message-id">>, St#st.headers),
+                    notify_rejected(From, MsgId, Rejected);
+                true ->
+                    nop
+            end
+    end,
+
     {ok, ReqId, St};
 send_result(#send_result{result = Result}, St) ->
     {error, email2sms_errors:format_error(Result), St}.
+
+%% https://www.ietf.org/rfc/rfc3461.txt
+notify_rejected(OrigSender, OrigMsgId, RejectedAddrs) ->
+    ?log_debug("Notify: ~p recipients rejected : ~p", [OrigSender, RejectedAddrs]),
+    {ok, Postmaster} = application:get_env(?APP, smtp_postmaster),
+    {ok, Opts} = application:get_env(?APP, smtp_client_opts),
+
+    RejectedAddrs2 = binstr:join(RejectedAddrs, <<",">>),
+    Email = {
+        Postmaster,
+        [OrigSender],
+        mimemail:encode({
+            <<"text">>, <<"plain">>, [
+                {<<"Subject">>, <<"Delivery failure for ", RejectedAddrs2/binary>>},
+                {<<"From">>, Postmaster},
+                {<<"To">>, OrigSender}
+            ],
+            [],
+            <<"Your message (id ", OrigMsgId/binary, ") could not be delivered to ",
+              RejectedAddrs2/binary>>
+        })
+    },
+    gen_smtp_client:send(Email, Opts).
 
 recover_to_cc_bcc(All, Headers) ->
     To = parse_addresses(proplists:get_value(<<"to">>, Headers, [])),
