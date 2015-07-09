@@ -40,6 +40,8 @@
                      | to_address.
 
 -record(st, {
+    remote_ip :: inet:ip_address(),
+    remote_host :: binary(),
     orig_data :: binary(),
     type :: binary(),
     subtype :: binary(),
@@ -93,7 +95,7 @@ init(Domain, SessionCount, PeerAddr, _Options) ->
             {ok, Greeting} = application:get_env(?APP, smtp_greeting),
             {ok, Vsn} = application:get_key(?APP, vsn),
             Banner = [Domain, " ESMTP ", Greeting, " ", Vsn],
-            {ok, Banner, #st{}};
+            {ok, Banner, #st{remote_ip = PeerAddr}};
         true ->
             ?log_error("Max session count exceeded: ~p", [SessionCount]),
             {stop, normal, ?E_SERVER_BUSY}
@@ -102,7 +104,7 @@ init(Domain, SessionCount, PeerAddr, _Options) ->
 handle_HELO(_Hostname, St) ->
     {ok, St}.
 
-handle_EHLO(_Hostname, Extensions, St) ->
+handle_EHLO(Hostname, Extensions, St) ->
     {ok, MaxMsgSize} = application:get_env(?APP, smtp_max_msg_size),
     Extensions2 =
         case MaxMsgSize of
@@ -111,7 +113,7 @@ handle_EHLO(_Hostname, Extensions, St) ->
             _ when is_integer(MaxMsgSize) ->
                 [{"SIZE", integer_to_list(MaxMsgSize)} | proplists:delete("SIZE", Extensions)]
         end,
-    {ok, Extensions2, St}.
+    {ok, Extensions2, St#st{remote_host = Hostname}}.
 
 handle_AUTH(_Type, _Username, _Password, St) ->
     {ok, St}.
@@ -134,6 +136,7 @@ handle_RCPT_extension(Extension, _St) ->
     error.
 
 handle_DATA(From, To, Data, St) ->
+    ReqTime = calendar:universal_time(),
 
     ?log_debug("Got an email (from: ~p, to: ~p)", [From, To]),
 
@@ -148,6 +151,14 @@ handle_DATA(From, To, Data, St) ->
                 {error, ?E_INTERNAL, St}
         end,
 
+
+    RespTime = calendar:universal_time(),
+    {_, Message, _} = Res,
+    alley_services_smtp_logger:log(
+        St#st.remote_ip, St#st.remote_host,
+        From, bstr:join(To, <<",">>),
+        ReqTime, Data,
+        RespTime, Message),
 
     Res.
 

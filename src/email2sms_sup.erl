@@ -26,5 +26,6 @@ start_link() ->
 
 init([]) ->
     {ok, {{one_for_one, 5, 10}, [
+        ?CHILD(alley_services_smtp_logger, permanent, 5000, worker),
         ?CHILD(email2sms_smtp_server, transient, 5000, worker)
     ]}}.
