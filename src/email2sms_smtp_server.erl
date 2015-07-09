@@ -484,31 +484,31 @@ send_result(#send_result{result = Result}, St) ->
     {error, email2sms_errors:format_error(Result), St}.
 
 %% https://www.ietf.org/rfc/rfc3461.txt
-notify_rejected(OrigSender, OrigMsgId, RejectedAddrs) ->
-    ?log_debug("Notify: ~p recipients rejected : ~p", [OrigSender, RejectedAddrs]),
+notify_rejected(Notifee, MsgId, RejectedAddrs) ->
+    ?log_debug("Notify: ~p recipients rejected : ~p", [Notifee, RejectedAddrs]),
     {ok, Postmaster} = application:get_env(?APP, smtp_postmaster),
     {ok, Opts} = application:get_env(?APP, smtp_client_opts),
 
-    RejectedAddrs2 = binstr:join(RejectedAddrs, <<",">>),
+    RejectedAddrs2 = binstr:join(RejectedAddrs, <<", ">>),
     Email = {
         Postmaster,
-        [OrigSender],
+        [Notifee],
         mimemail:encode({
             <<"text">>, <<"plain">>, [
                 {<<"Subject">>, <<"Delivery failure for ", RejectedAddrs2/binary>>},
                 {<<"From">>, Postmaster},
-                {<<"To">>, OrigSender}
+                {<<"To">>, Notifee}
             ],
             [],
-            <<"Your message (id ", OrigMsgId/binary, ") could not be delivered to ",
+            <<"Your message (id ", MsgId/binary, ") could not be delivered to ",
               RejectedAddrs2/binary>>
         })
     },
     Callback =
         fun({ok, Res}) ->
-            ?log_debug("Notify succeeded with: ~p", [Res]);
+            ?log_debug("Notify: ~p succeeded with: ~p", [Notifee, Res]);
            (Error) ->
-            ?log_error("Notify failed with: ~p", [Error])
+            ?log_error("Notify: ~p failed with: ~p", [Notifee, Error])
         end,
     gen_smtp_client:send(Email, Opts, Callback).
 
