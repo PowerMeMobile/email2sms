@@ -15,11 +15,18 @@ EMAIL_PORT = os.getenv('EMAIL_PORT')
 if EMAIL_PORT == None or EMAIL_PORT == '':
     EMAIL_PORT = '2525'
 
-FROM_KNOWN = 'email-postpaid@mail.com'
-FROM_UNKNOWN = 'whoever@mail.com'
-TO = ['375296543210@mail.com', '375296543211@mail.com']
-SUBJECT = '10009:user:password'
-TO_ADDRESS = '375296660009@mail.com'
+AUTH_FROM_ADDR = 'email-postpaid@mail.com'
+AUTH_FROM_ADDR_BAD = 'whoever@mail.com'
+
+AUTH_SUBJECT = '10009:user:password'
+AUTH_SUBJECT_BAD = 'bad auth subject'
+
+AUTH_TO_ADDR = '375296660009@mail.com'
+AUTH_TO_ADDR_BAD = 'bad_number@mail.com'
+
+TO = '375296543210@mail.com'
+TO2 = ['375296543210@mail.com', '375296543211@mail.com']
+
 
 @pytest.fixture
 def smtp():
@@ -28,38 +35,100 @@ def smtp():
     assert resp == 250
     return smtp
 
+#
+# Utils
+#
+
+def sendmail(smtp, f, t, msg):
+    try:
+        return smtp.sendmail(f, t, msg)
+    except smtplib.SMTPDataError as (code, resp):
+        return (code, resp)
+
+#
+# Auth schemes
+#
+
+def test_auth_from_address_succ(smtp):
+    msg = MIMEText('from_address test')
+    msg['From'] = AUTH_FROM_ADDR
+    msg['To'] = TO
+    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    assert {} == res
+
+def test_auth_from_address_fail(smtp):
+    msg = MIMEText('from_address test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = TO
+    (code, resp) = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    assert code == 550
+    assert resp == 'Invalid user account'
+
+def test_auth_subject_succ(smtp):
+    msg = MIMEText('subject test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = TO
+    msg['Subject'] = AUTH_SUBJECT
+    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    assert {} == res
+
+def test_auth_subject_fail(smtp):
+    msg = MIMEText('subject test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = TO
+    msg['Subject'] = AUTH_SUBJECT_BAD
+    (code, resp) = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    assert code == 550
+    assert resp == 'Invalid user account'
+
+def test_auth_to_address_succ(smtp):
+    msg = MIMEText('to_address test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = AUTH_TO_ADDR
+    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    assert {} == res
+
+def test_auth_to_address_fail(smtp):
+    msg = MIMEText('to_address test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = AUTH_TO_ADDR_BAD
+    (code, resp) = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    assert code == 550
+    assert resp == 'Invalid user account'
+
+#
+# MIME content types
+#
+
 # raw text
-def test_subject_raw_text_us_ascii(smtp):
+def test_raw_text_us_ascii(smtp):
     msg = """\
 From: %s
 To: %s
 Subject: %s
 
 %s
-""" % (FROM_UNKNOWN, ",".join(TO), SUBJECT, 'raw text us-ascii')
-
-    res = smtp.sendmail(FROM_UNKNOWN, TO, msg)
+""" % (AUTH_FROM_ADDR_BAD, TO, AUTH_SUBJECT, 'raw text us-ascii')
+    res = sendmail(smtp, AUTH_FROM_ADDR_BAD, TO, msg)
     assert {} == res
 
-def test_subject_text_plain_us_ascii(smtp):
-    msg = MIMEText('text/plain us-ascii')
-    msg['From'] = FROM_UNKNOWN
-    msg['To'] = ','.join(TO)
-    msg['Subject'] = SUBJECT
-
-    res = smtp.sendmail(msg['From'], msg['To'], msg.as_string())
+def test_text_plain_us_ascii(smtp):
+    msg = MIMEText('text plain us-ascii')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = TO
+    msg['Subject'] = AUTH_SUBJECT
+    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
     assert {} == res
 
-def test_subject_text_plain_utf_8(smtp):
+def test_text_plain_utf_8(smtp):
     msg = MIMEText('Привет, как дела?', _charset='utf-8')
-    msg['From'] = FROM_UNKNOWN
-    msg['To'] = ','.join(TO)
-    msg['Subject'] = SUBJECT
-
-    res = smtp.sendmail(msg['From'], msg['To'], msg.as_string())
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = TO
+    msg['Subject'] = AUTH_SUBJECT
+    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
     assert {} == res
 
-def test_subject_text_html(smtp):
+def test_text_html(smtp):
     html = """\
 <html>
   <head></head>
@@ -68,21 +137,18 @@ def test_subject_text_html(smtp):
   </body>
 </html>
 """
-
     msg = MIMEText(html, 'html')
-    msg['From'] = FROM_UNKNOWN
-    msg['To'] = ','.join(TO)
-    msg['Subject'] = SUBJECT
-
-    res = smtp.sendmail(msg['From'], msg['To'], msg.as_string())
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = TO
+    msg['Subject'] = AUTH_SUBJECT
+    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
     assert {} == res
 
-def test_subject_multipart_alternative(smtp):
-    msg = MIMEMultipart('alternative')
-    msg['From'] = FROM_UNKNOWN
-    msg['To'] = ','.join(TO)
-    msg['Subject'] = SUBJECT
-
+def test_multipart_alternative(smtp):
+    msg = MIMEMultipart('multipart alternative')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = TO
+    msg['Subject'] = AUTH_SUBJECT
     text = "text/alternative text"
     html = """\
 <html>
@@ -92,49 +158,18 @@ def test_subject_multipart_alternative(smtp):
   </body>
 </html>
 """
-
     part1 = MIMEText(text, 'plain')
     part2 = MIMEText(html, 'html')
-
     msg.attach(part1)
     msg.attach(part2)
-
-    res = smtp.sendmail(msg['From'], msg['To'], msg.as_string())
+    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
     assert {} == res
 
-def test_subject_multipart_mixed(smtp):
+def test_multipart_mixed(smtp):
     msg = MIMEMultipart()
-    msg['From'] = FROM_UNKNOWN
-    msg['To'] = ','.join(TO)
-    msg['Subject'] = SUBJECT
-    msg.attach(MIMEText('multipart / mixed'))
-
-    res = smtp.sendmail(msg['From'], msg['To'], msg.as_string())
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = TO
+    msg['Subject'] = AUTH_SUBJECT
+    msg.attach(MIMEText('multipart mixed'))
+    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
     assert {} == res
-
-def test_from_address_text_plain_us_ascii(smtp):
-    msg = MIMEText('text/plain us-ascii')
-    msg['From'] = FROM_KNOWN
-    msg['To'] = ','.join(TO)
-
-    res = smtp.sendmail(msg['From'], msg['To'], msg.as_string())
-    assert {} == res
-
-def test_to_address_text_plain_us_ascii(smtp):
-    msg = MIMEText('text/plain us-ascii')
-    msg['From'] = FROM_UNKNOWN
-    msg['To'] = TO_ADDRESS
-
-    res = smtp.sendmail(msg['From'], msg['To'], msg.as_string())
-    assert {} == res
-
-def test_unknown_user_fail(smtp):
-    msg = MIMEText('text/plain us-ascii')
-    msg['From'] = FROM_UNKNOWN
-    msg['To'] = ','.join(TO)
-
-    try:
-        smtp.sendmail(msg['From'], msg['To'], msg.as_string())
-    except smtplib.SMTPDataError as (code, resp):
-        assert code == 550
-        assert resp == 'Invalid user account'
