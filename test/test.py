@@ -211,7 +211,7 @@ def test_filter_by_domains_2_ok_2_bad_succ(smtp):
 #
 
 def test_filter_by_coverage_2_ok_succ(smtp):
-    msg = MIMEText('filter by domain test')
+    msg = MIMEText('filter by coverage test')
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = ','.join(TO2)
     msg['Subject'] = AUTH_SUBJECT
@@ -219,7 +219,7 @@ def test_filter_by_coverage_2_ok_succ(smtp):
     assert {} == res
 
 def test_filter_by_coverage_2_bad_fail(smtp):
-    msg = MIMEText('filter by domain test')
+    msg = MIMEText('filter by coverage test')
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = ','.join(TO2_BAD_COVERAGE)
     msg['Subject'] = AUTH_SUBJECT
@@ -229,7 +229,7 @@ def test_filter_by_coverage_2_bad_fail(smtp):
 
 # assumes ignore_invalid | notify_invalid policy in place
 def test_filter_by_coverage_2_ok_2_bad_succ(smtp):
-    msg = MIMEText('filter by domain test')
+    msg = MIMEText('filter by coverage test')
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = ','.join(TO2 + TO2_BAD_COVERAGE)
     msg['Subject'] = AUTH_SUBJECT
