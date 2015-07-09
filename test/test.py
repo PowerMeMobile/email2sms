@@ -28,6 +28,7 @@ TO = '375296543210@mail.com'
 
 TO2 = ['375296543210@mail.com', '375296543211@mail.com']
 TO2_BAD_DOMAINS = ['375296543210@mail2.com', '375296543211@mail2.com']
+TO2_BAD_COVERAGE = ['888296543210@mail.com', '888296543211@mail.com']
 
 @pytest.fixture
 def smtp():
@@ -203,4 +204,34 @@ def test_filter_by_domains_2_ok_2_bad_succ(smtp):
     msg['To'] = ','.join(TO2 + TO2_BAD_DOMAINS)
     msg['Subject'] = AUTH_SUBJECT
     res = sendmail(smtp, msg['From'], TO2 + TO2_BAD_DOMAINS, msg.as_string())
+    assert {} == res
+
+#
+# Filter by coverage
+#
+
+def test_filter_by_coverage_2_ok_succ(smtp):
+    msg = MIMEText('filter by domain test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = ','.join(TO2)
+    msg['Subject'] = AUTH_SUBJECT
+    res = sendmail(smtp, msg['From'], TO2, msg.as_string())
+    assert {} == res
+
+def test_filter_by_coverage_2_bad_fail(smtp):
+    msg = MIMEText('filter by domain test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = ','.join(TO2_BAD_COVERAGE)
+    msg['Subject'] = AUTH_SUBJECT
+    (code, resp) = sendmail(smtp, msg['From'], TO2_BAD_COVERAGE, msg.as_string())
+    assert code == 550
+    assert resp == 'No valid recipients found'
+
+# assumes ignore_invalid | notify_invalid policy in place
+def test_filter_by_coverage_2_ok_2_bad_succ(smtp):
+    msg = MIMEText('filter by domain test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = ','.join(TO2 + TO2_BAD_COVERAGE)
+    msg['Subject'] = AUTH_SUBJECT
+    res = sendmail(smtp, msg['From'], TO2 + TO2_BAD_COVERAGE, msg.as_string())
     assert {} == res
