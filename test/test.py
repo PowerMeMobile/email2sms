@@ -25,8 +25,9 @@ AUTH_TO_ADDR = '375296660009@mail.com'
 AUTH_TO_ADDR_BAD = 'bad_number@mail.com'
 
 TO = '375296543210@mail.com'
-TO2 = ['375296543210@mail.com', '375296543211@mail.com']
 
+TO2 = ['375296543210@mail.com', '375296543211@mail.com']
+TO2_BAD_DOMAINS = ['375296543210@mail2.com', '375296543211@mail2.com']
 
 @pytest.fixture
 def smtp():
@@ -53,14 +54,14 @@ def test_auth_from_address_succ(smtp):
     msg = MIMEText('from_address test')
     msg['From'] = AUTH_FROM_ADDR
     msg['To'] = TO
-    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    res = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert {} == res
 
 def test_auth_from_address_fail(smtp):
     msg = MIMEText('from_address test')
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = TO
-    (code, resp) = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    (code, resp) = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert code == 550
     assert resp == 'Invalid user account'
 
@@ -69,7 +70,7 @@ def test_auth_subject_succ(smtp):
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = TO
     msg['Subject'] = AUTH_SUBJECT
-    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    res = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert {} == res
 
 def test_auth_subject_fail(smtp):
@@ -77,7 +78,7 @@ def test_auth_subject_fail(smtp):
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = TO
     msg['Subject'] = AUTH_SUBJECT_BAD
-    (code, resp) = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    (code, resp) = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert code == 550
     assert resp == 'Invalid user account'
 
@@ -85,14 +86,14 @@ def test_auth_to_address_succ(smtp):
     msg = MIMEText('to_address test')
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = AUTH_TO_ADDR
-    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    res = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert {} == res
 
 def test_auth_to_address_fail(smtp):
     msg = MIMEText('to_address test')
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = AUTH_TO_ADDR_BAD
-    (code, resp) = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    (code, resp) = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert code == 550
     assert resp == 'Invalid user account'
 
@@ -101,7 +102,7 @@ def test_auth_to_address_fail(smtp):
 #
 
 # raw text
-def test_raw_text_us_ascii(smtp):
+def test_raw_text_us_ascii_succ(smtp):
     msg = """\
 From: %s
 To: %s
@@ -112,23 +113,23 @@ Subject: %s
     res = sendmail(smtp, AUTH_FROM_ADDR_BAD, TO, msg)
     assert {} == res
 
-def test_text_plain_us_ascii(smtp):
+def test_text_plain_us_ascii_succ(smtp):
     msg = MIMEText('text plain us-ascii')
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = TO
     msg['Subject'] = AUTH_SUBJECT
-    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    res = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert {} == res
 
-def test_text_plain_utf_8(smtp):
+def test_text_plain_utf_8_succ(smtp):
     msg = MIMEText('Привет, как дела?', _charset='utf-8')
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = TO
     msg['Subject'] = AUTH_SUBJECT
-    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    res = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert {} == res
 
-def test_text_html(smtp):
+def test_text_html_succ(smtp):
     html = """\
 <html>
   <head></head>
@@ -141,10 +142,10 @@ def test_text_html(smtp):
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = TO
     msg['Subject'] = AUTH_SUBJECT
-    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    res = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert {} == res
 
-def test_multipart_alternative(smtp):
+def test_multipart_alternative_succ(smtp):
     msg = MIMEMultipart('multipart alternative')
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = TO
@@ -162,14 +163,44 @@ def test_multipart_alternative(smtp):
     part2 = MIMEText(html, 'html')
     msg.attach(part1)
     msg.attach(part2)
-    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    res = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert {} == res
 
-def test_multipart_mixed(smtp):
+def test_multipart_mixed_succ(smtp):
     msg = MIMEMultipart()
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = TO
     msg['Subject'] = AUTH_SUBJECT
     msg.attach(MIMEText('multipart mixed'))
-    res = sendmail(smtp, msg['From'], msg['To'], msg.as_string())
+    res = sendmail(smtp, msg['From'], TO, msg.as_string())
+    assert {} == res
+
+#
+# Filter by domains
+#
+
+def test_filter_by_domains_2_ok_succ(smtp):
+    msg = MIMEText('filter by domain test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = ','.join(TO2)
+    msg['Subject'] = AUTH_SUBJECT
+    res = sendmail(smtp, msg['From'], TO2, msg.as_string())
+    assert {} == res
+
+def test_filter_by_domains_2_bad_fail(smtp):
+    msg = MIMEText('filter by domain test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = ','.join(TO2_BAD_DOMAINS)
+    msg['Subject'] = AUTH_SUBJECT
+    (code, resp) = sendmail(smtp, msg['From'], TO2_BAD_DOMAINS, msg.as_string())
+    assert code == 550
+    assert resp == 'No valid recipients found'
+
+# assumes ignore_invalid | notify_invalid policy in place
+def test_filter_by_domains_2_ok_2_bad_succ(smtp):
+    msg = MIMEText('filter by domain test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = ','.join(TO2 + TO2_BAD_DOMAINS)
+    msg['Subject'] = AUTH_SUBJECT
+    res = sendmail(smtp, msg['From'], TO2 + TO2_BAD_DOMAINS, msg.as_string())
     assert {} == res
