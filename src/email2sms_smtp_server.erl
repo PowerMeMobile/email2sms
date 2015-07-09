@@ -40,6 +40,7 @@
                      | to_address.
 
 -record(st, {
+    orig_data :: binary(),
     type :: binary(),
     subtype :: binary(),
     headers :: [{binary(), binary()}],
@@ -153,6 +154,7 @@ handle_DATA(From, To, Data, St) ->
     ?log_debug("~p", [Content]),
 
     St2 = St#st{
+        orig_data = Data,
         type = Type,
         subtype = Subtype,
         headers = Headers5,
@@ -473,7 +475,8 @@ send_result(#send_result{result = ok, req_id = ReqId}, St) ->
                 length(Rejected) > 0 ->
                     From = proplists:get_value(<<"from">>, St#st.headers),
                     MsgId = proplists:get_value(<<"message-id">>, St#st.headers, <<"N/A">>),
-                    notify_rejected(From, MsgId, Rejected);
+                    Data = St#st.orig_data,
+                    notify_rejected(From, MsgId, Data, Rejected);
                 true ->
                     nop
             end
@@ -484,24 +487,31 @@ send_result(#send_result{result = Result}, St) ->
     {error, email2sms_errors:format_error(Result), St}.
 
 %% https://www.ietf.org/rfc/rfc3461.txt
-notify_rejected(Notifee, MsgId, RejectedAddrs) ->
+notify_rejected(Notifee, MsgId, Data, RejectedAddrs) ->
     ?log_debug("Notify: ~p recipients rejected : ~p", [Notifee, RejectedAddrs]),
     {ok, Postmaster} = application:get_env(?APP, smtp_postmaster),
     {ok, Opts} = application:get_env(?APP, smtp_client_opts),
 
-    RejectedAddrs2 = binstr:join(RejectedAddrs, <<", ">>),
     Email = {
         Postmaster,
         [Notifee],
         mimemail:encode({
             <<"text">>, <<"plain">>, [
-                {<<"Subject">>, <<"Delivery failure for ", RejectedAddrs2/binary>>},
+                {<<"Subject">>, <<"Delivery failure for ", (binstr:join(RejectedAddrs, <<", ">>))/binary>>},
                 {<<"From">>, Postmaster},
                 {<<"To">>, Notifee}
             ],
             [],
-            <<"Your message (id ", MsgId/binary, ") could not be delivered to ",
-              RejectedAddrs2/binary>>
+            <<"Your message (id ", MsgId/binary, ") could not be delivered to:",
+              "\r\n",
+              "\r\n\t",
+              (binstr:join(RejectedAddrs, <<"\r\n\t">>))/binary,
+              "\r\n",
+              "\r\n",
+              "----- Original message -----",
+              "\r\n",
+              "\r\n",
+              Data/binary>>
         })
     },
     Callback =
