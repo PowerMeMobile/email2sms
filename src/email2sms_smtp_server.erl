@@ -522,9 +522,20 @@ notify_rejected(Notifee, MsgId, Data, RejectedAddrs) ->
         end,
     gen_smtp_client:send(Email, Opts, Callback).
 
+lower_case({Type, Subtype, Headers, Params, Content})
+        when Type =:= <<"multipart">> ->
+    Headers2 = [{bstr:lower(K), V} || {K, V} <- Headers],
+    Params2 =  [{bstr:lower(K), V} || {K, V} <- Params],
+    Content2 = [lower_case(C) || C <- Content],
+    {Type, Subtype, Headers2, Params2, Content2};
+lower_case({Type, Subtype, Headers, Params, Content}) ->
+    Headers2 = [{bstr:lower(K), V} || {K, V} <- Headers],
+    Params2 =  [{bstr:lower(K), V} || {K, V} <- Params],
+    {Type, Subtype, Headers2, Params2, Content}.
+
 recover_to_cc_bcc(All, Headers) ->
-    To = parse_addresses(proplists:get_value(<<"to">>, Headers, [])),
-    Cc = parse_addresses(proplists:get_value(<<"cc">>, Headers, [])),
+    {ok, To} = parse_addresses(proplists:get_value(<<"to">>, Headers, [])),
+    {ok, Cc} = parse_addresses(proplists:get_value(<<"cc">>, Headers, [])),
     Bcc = (All -- To) -- Cc,
     {To, Cc, Bcc}.
 
@@ -533,7 +544,7 @@ recover_to_cc_bcc(All, Headers) ->
 parse_addresses(AddrsRaw) ->
     case smtp_util:parse_rfc822_addresses(AddrsRaw) of
         {ok, AddrsParsed} ->
-            [list_to_binary(Addr) || {_Name, Addr} <- AddrsParsed];
+            {ok, [list_to_binary(Addr) || {_Name, Addr} <- AddrsParsed]};
         {error, Reason} ->
             ?log_error("parse_rfc822_addresses: ~p failed with: ~p", [AddrsRaw, Reason]),
             case re:replace(AddrsRaw, "\"", "", [global, {return, binary}]) of
@@ -700,19 +711,19 @@ cleanup_message(Message, [S|Ss]) ->
 -ifdef(TEST).
 
 parse_addresses_test() ->
-    ?assertEqual([<<"to@m.c">>],
+    ?assertEqual({ok, [<<"to@m.c">>]},
         parse_addresses(<<"\"to\" <to@m.c>">>)),
-    ?assertEqual([<<"to@m.c">>],
+    ?assertEqual({ok, [<<"to@m.c">>]},
         parse_addresses(<<"\"to@m.c\" <to@m.c>">>)),
-    ?assertEqual([<<"to@m.c">>],
+    ?assertEqual({ok, [<<"to@m.c">>]},
         parse_addresses(<<"<to@m.c>">>)),
-    ?assertEqual([<<"to@m.c">>],
+    ?assertEqual({ok, [<<"to@m.c">>]},
         parse_addresses(<<"to@m.c">>)),
-    ?assertEqual([<<"to@m.c">>, <<"to2@m.c">>, <<"to3@m.c">>, <<"to4@m.c">>],
+    ?assertEqual({ok, [<<"to@m.c">>, <<"to2@m.c">>, <<"to3@m.c">>, <<"to4@m.c">>]},
         parse_addresses(
             <<"\"to\" <to@m.c>,\"to2@m.c\" <to2@m.c>,<to3@m.c>,to4@m.c">>)),
     %% Paste to Thinderbird: 123@tam.xyz; 456@mail.com
-    ?assertEqual([<<"123@tam.xyz">>, <<"456@mail.com">>],
+    ?assertEqual({ok, [<<"123@tam.xyz">>, <<"456@mail.com">>]},
         parse_addresses(<<"\"123\"@tam.xyz, 456@mail.com">>)).
 
 recover_to_cc_bcc_test() ->
