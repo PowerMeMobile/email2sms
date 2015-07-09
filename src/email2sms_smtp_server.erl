@@ -521,8 +521,18 @@ recover_to_cc_bcc(All, Headers) ->
 %% get rid of possible names in form `"name" <address@domain>'
 %% variations. only return `address@domain' parts
 parse_addresses(AddrsRaw) ->
-    {ok, AddrsParsed} = smtp_util:parse_rfc822_addresses(AddrsRaw),
-    [list_to_binary(Addr) || {_Name, Addr} <- AddrsParsed].
+    case smtp_util:parse_rfc822_addresses(AddrsRaw) of
+        {ok, AddrsParsed} ->
+            [list_to_binary(Addr) || {_Name, Addr} <- AddrsParsed];
+        {error, Reason} ->
+            ?log_error("parse_rfc822_addresses: ~p failed with: ~p", [AddrsRaw, Reason]),
+            case re:replace(AddrsRaw, "\"", "", [global, {return, binary}]) of
+                AddrsRaw ->
+                    {error, Reason};
+                AddrsRaw2 ->
+                    parse_addresses(AddrsRaw2)
+            end
+    end.
 
 collect_recipients_from_fields(Headers, Fields) ->
     collect_recipients_from_fields(Headers, Fields, []).
@@ -690,7 +700,10 @@ parse_addresses_test() ->
         parse_addresses(<<"to@m.c">>)),
     ?assertEqual([<<"to@m.c">>, <<"to2@m.c">>, <<"to3@m.c">>, <<"to4@m.c">>],
         parse_addresses(
-            <<"\"to\" <to@m.c>,\"to2@m.c\" <to2@m.c>,<to3@m.c>,to4@m.c">>)).
+            <<"\"to\" <to@m.c>,\"to2@m.c\" <to2@m.c>,<to3@m.c>,to4@m.c">>)),
+    %% Paste to Thinderbird: 123@tam.xyz; 456@mail.com
+    ?assertEqual([<<"123@tam.xyz">>, <<"456@mail.com">>],
+        parse_addresses(<<"\"123\"@tam.xyz, 456@mail.com">>)).
 
 recover_to_cc_bcc_test() ->
     ?assertEqual({[], [], []}, recover_to_cc_bcc([], [])),
