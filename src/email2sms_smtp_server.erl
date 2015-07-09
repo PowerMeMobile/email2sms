@@ -134,8 +134,48 @@ handle_RCPT_extension(Extension, _St) ->
     error.
 
 handle_DATA(From, To, Data, St) ->
+
     ?log_debug("Got an email (from: ~p, to: ~p)", [From, To]),
 
+    Res =
+        try
+            handle_data(From, To, Data, St)
+        catch
+            Class:Error ->
+                Stacktrace = erlang:get_stacktrace(),
+                ?log_error("Exception: ~p:~p Stacktrace: ~p",
+                    [Class, Error, Stacktrace]),
+                {error, ?E_INTERNAL, St}
+        end,
+
+
+    Res.
+
+handle_RSET(_St) ->
+    #st{}.
+
+handle_VRFY(Address, St) ->
+    ?log_debug("Verify called: ~s", [Address]),
+    {error, "252 VRFY disabled", St}.
+
+handle_other(Verb, Arg, St) ->
+    ?log_info("Unrecognized other command (Verb: ~p, Arg: ~p)", [Verb, Arg]),
+    {?E_NOT_RECOGNIZED, St}.
+
+code_change(_OldVsn, St, _Extra) ->
+    {ok, St}.
+
+terminate(normal, St) ->
+    {ok, normal, St};
+terminate(Reason, St) ->
+    ?log_error("Terminate failed with: ~p", [Reason]),
+    {ok, Reason, St}.
+
+%% ===================================================================
+%% Internal
+%% ===================================================================
+
+handle_data(From, To, Data, St) ->
     {Type, Subtype, Headers, Params, Content} =
         lower_case(mimemail:decode(Data)),
 
@@ -163,42 +203,7 @@ handle_DATA(From, To, Data, St) ->
         all_recipients = To
     },
 
-    handle_data(filter_recipients_by_fields, St2).
-
-handle_RSET(_St) ->
-    #st{}.
-
-handle_VRFY(Address, St) ->
-    ?log_debug("Verify called: ~s", [Address]),
-    {error, "252 VRFY disabled", St}.
-
-handle_other(Verb, Arg, St) ->
-    ?log_info("Unrecognized other command (Verb: ~p, Arg: ~p)", [Verb, Arg]),
-    {?E_NOT_RECOGNIZED, St}.
-
-code_change(_OldVsn, St, _Extra) ->
-    {ok, St}.
-
-terminate(normal, St) ->
-    {ok, normal, St};
-terminate(Reason, St) ->
-    ?log_error("Terminate failed with: ~p", [Reason]),
-    {ok, Reason, St}.
-
-%% ===================================================================
-%% Internal
-%% ===================================================================
-
-lower_case({Type, Subtype, Headers, Params, Content})
-        when Type =:= <<"multipart">> ->
-    Headers2 = [{bstr:lower(K), V} || {K, V} <- Headers],
-    Params2 =  [{bstr:lower(K), V} || {K, V} <- Params],
-    Content2 = [lower_case(C) || C <- Content],
-    {Type, Subtype, Headers2, Params2, Content2};
-lower_case({Type, Subtype, Headers, Params, Content}) ->
-    Headers2 = [{bstr:lower(K), V} || {K, V} <- Headers],
-    Params2 =  [{bstr:lower(K), V} || {K, V} <- Params],
-    {Type, Subtype, Headers2, Params2, Content}.
+   handle_data(filter_recipients_by_fields, St2).
 
 handle_data(filter_recipients_by_fields, St) ->
     {ok, Fields} = application:get_env(?APP, smtp_recipient_fields),

@@ -235,3 +235,16 @@ def test_filter_by_coverage_2_ok_2_bad_succ(smtp):
     msg['Subject'] = AUTH_SUBJECT
     res = sendmail(smtp, msg['From'], TO2 + TO2_BAD_COVERAGE, msg.as_string())
     assert {} == res
+
+#
+# Internal error
+#
+
+def test_internal_error_succ(smtp):
+    msg = MIMEText('internal error test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = '; '.join(TO2)
+    msg['Subject'] = AUTH_SUBJECT
+    (code, resp) = sendmail(smtp, msg['From'], TO2, msg.as_string())
+    assert code == 554
+    assert resp == 'Internal server error'
