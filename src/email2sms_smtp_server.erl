@@ -472,7 +472,7 @@ send_result(#send_result{result = ok, req_id = ReqId}, St) ->
             if
                 length(Rejected) > 0 ->
                     From = proplists:get_value(<<"from">>, St#st.headers),
-                    MsgId = proplists:get_value(<<"message-id">>, St#st.headers),
+                    MsgId = proplists:get_value(<<"message-id">>, St#st.headers, <<"N/A">>),
                     notify_rejected(From, MsgId, Rejected);
                 true ->
                     nop
