@@ -16,7 +16,7 @@ if EMAIL_PORT == None or EMAIL_PORT == '':
     EMAIL_PORT = '2525'
 
 AUTH_FROM_ADDR = 'email-postpaid@mail.com'
-AUTH_FROM_ADDR_BAD = 'whoever@mail.com'
+AUTH_FROM_ADDR_BAD = 'd.klionsky@dev1team.net'
 
 AUTH_SUBJECT = '10009:user:password'
 AUTH_SUBJECT_BAD = 'bad auth subject'
