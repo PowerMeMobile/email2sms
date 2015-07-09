@@ -87,14 +87,14 @@ def test_auth_to_address_succ(smtp):
     msg = MIMEText('to_address test')
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = AUTH_TO_ADDR
-    res = sendmail(smtp, msg['From'], TO, msg.as_string())
+    res = sendmail(smtp, msg['From'], AUTH_TO_ADDR, msg.as_string())
     assert {} == res
 
 def test_auth_to_address_fail(smtp):
     msg = MIMEText('to_address test')
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = AUTH_TO_ADDR_BAD
-    (code, resp) = sendmail(smtp, msg['From'], TO, msg.as_string())
+    (code, resp) = sendmail(smtp, msg['From'], AUTH_TO_ADDR_BAD, msg.as_string())
     assert code == 550
     assert resp == 'Invalid user account'
 
