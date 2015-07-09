@@ -136,10 +136,9 @@ handle_RCPT_extension(Extension, _St) ->
     error.
 
 handle_DATA(From, To, Data, St) ->
-    ReqTime = calendar:universal_time(),
-
     ?log_debug("Got an email (from: ~p, to: ~p)", [From, To]),
 
+    ReqTime = calendar:universal_time(),
     Res =
         try
             handle_data(From, To, Data, St)
