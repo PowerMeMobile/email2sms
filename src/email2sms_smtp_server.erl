@@ -101,8 +101,14 @@ init(Domain, SessionCount, PeerAddr, _Options) ->
             {stop, normal, ?E_SERVER_BUSY}
     end.
 
-handle_HELO(_Hostname, St) ->
-    {ok, St}.
+handle_HELO(Hostname, St) ->
+    {ok, MaxMsgSize} = application:get_env(?APP, smtp_max_msg_size),
+    case MaxMsgSize of
+        undefined ->
+            {ok, St#st{remote_host = Hostname}};
+        _ when is_integer(MaxMsgSize) ->
+            {ok, MaxMsgSize, St#st{remote_host = Hostname}}
+    end.
 
 handle_EHLO(Hostname, Extensions, St) ->
     {ok, MaxMsgSize} = application:get_env(?APP, smtp_max_msg_size),
