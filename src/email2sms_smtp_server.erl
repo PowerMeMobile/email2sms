@@ -51,7 +51,7 @@
     all_recipients :: [email()],
     recipients :: [email()],
     auth_schema :: auth_schema(),
-    customer :: #auth_customer_v1{} | [#auth_customer_v1{}],
+    customer :: #auth_customer_v2{} | [#auth_customer_v2{}],
     message :: binary(),
     encoding :: default | ucs2,
     size :: pos_integer()
@@ -428,9 +428,9 @@ handle_data(send, St) ->
     end.
 
 fill_coverage_tab(Customer, CoverageTab) ->
-    Networks = Customer#auth_customer_v1.networks,
-    Providers = Customer#auth_customer_v1.providers,
-    DefProvId = Customer#auth_customer_v1.default_provider_id,
+    Networks = Customer#auth_customer_v2.networks,
+    Providers = Customer#auth_customer_v2.providers,
+    DefProvId = Customer#auth_customer_v2.default_provider_id,
     alley_services_coverage:fill_coverage_tab(
         Networks, Providers, DefProvId, CoverageTab).
 
@@ -444,9 +444,9 @@ is_recipient_routable(Email, CoverageTab) ->
     end.
 
 send_message(Customer, Recipients, Message, Encoding, Size) ->
-    CustomerUuid = Customer#auth_customer_v1.customer_uuid,
-    UserId = Customer#auth_customer_v1.user_id,
-    Originator = Customer#auth_customer_v1.default_source,
+    CustomerUuid = Customer#auth_customer_v2.customer_uuid,
+    UserId = Customer#auth_customer_v2.user_id,
+    Originator = Customer#auth_customer_v2.default_source,
 
     Params = common_smpp_params(Customer) ++ [
         {esm_class, 3},
@@ -597,7 +597,7 @@ authenticate_from_address(St) ->
     ?log_debug("Auth schema: from_address", []),
     From = proplists:get_value(<<"from">>, St#st.headers),
     case alley_services_auth:authenticate_by_email(From, email) of
-        {ok, #auth_resp_v2{result = #auth_customer_v1{} = Customer}} ->
+        {ok, #auth_resp_v2{result = #auth_customer_v2{} = Customer}} ->
             {ok, Customer};
         {ok, #auth_resp_v2{result = #auth_error_v2{code = Error}}} ->
             ?log_error("Got failed auth response with: ~p", [Error]),
@@ -615,7 +615,7 @@ authenticate_subject(St) ->
             ?log_debug("CustomerId: ~p, UserId: ~p, Password: ~p",
                 [CustomerId, UserId, Password]),
                 case alley_services_auth:authenticate(CustomerId, UserId, Password, email) of
-                    {ok, #auth_resp_v2{result = #auth_customer_v1{} = Customer}} ->
+                    {ok, #auth_resp_v2{result = #auth_customer_v2{} = Customer}} ->
                         {ok, Customer};
                     {ok, #auth_resp_v2{result = #auth_error_v2{code = Error}}} ->
                         ?log_error("Got failed auth response with: ~p", [Error]),
@@ -632,7 +632,7 @@ authenticate_to_address(St) ->
     ?log_debug("Auth schema: to_address", []),
     Recipients = St#st.recipients,
     Res = [{R, authenticate_by_msisdn(R)} || R <- Recipients],
-    Customers = [C || {_R, {ok, #auth_customer_v1{} = C}} <- Res],
+    Customers = [C || {_R, {ok, #auth_customer_v2{} = C}} <- Res],
     BadRecipients = [R || {R, {error, _}} <- Res],
     case Customers of
         [] ->
@@ -644,7 +644,7 @@ authenticate_to_address(St) ->
 authenticate_by_msisdn(Email) ->
     Msisdn = msisdn_from_email(Email),
     case alley_services_auth:authenticate_by_msisdn(Msisdn, email) of
-        {ok, #auth_resp_v2{result = #auth_customer_v1{} = Customer}} ->
+        {ok, #auth_resp_v2{result = #auth_customer_v2{} = Customer}} ->
             {ok, Customer};
         {ok, #auth_resp_v2{result = #auth_error_v2{code = Error}}} ->
             ?log_error("Got failed auth response with: ~p", [Error]),
@@ -655,10 +655,10 @@ authenticate_by_msisdn(Email) ->
     end.
 
 common_smpp_params(Customer) ->
-    ReceiptsAllowed = Customer#auth_customer_v1.receipts_allowed,
-    NoRetry = Customer#auth_customer_v1.no_retry,
+    ReceiptsAllowed = Customer#auth_customer_v2.receipts_allowed,
+    NoRetry = Customer#auth_customer_v2.no_retry,
     Validity = alley_services_utils:fmt_validity(
-        Customer#auth_customer_v1.default_validity),
+        Customer#auth_customer_v2.default_validity),
     [
         {registered_delivery, ReceiptsAllowed},
         {service_type, <<>>},
