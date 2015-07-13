@@ -300,9 +300,11 @@ handle_data(authenticate, St) ->
         {to_address,   fun authenticate_to_address/1}
     ],
     Fun = fun
-        ({Schema, Method}, next_schema) ->
-            case lists:member(Schema, Schemes) of
-                true ->
+        (Schema, next_schema) ->
+            case proplists:get_value(Schema, Methods) of
+                undefined ->
+                    next_schema;
+                Method ->
                     case Method(St) of
                         {ok, Result} ->
                             {Schema, Result};
@@ -310,14 +312,12 @@ handle_data(authenticate, St) ->
                             ?log_debug("Auth schema: ~p failed with: ~p",
                                 [Schema, Reason]),
                             next_schema
-                    end;
-                false ->
-                    next_schema
+                    end
             end;
-        ({_, _}, {Schema, Result}) ->
+        (_, {Schema, Result}) ->
             {Schema, Result}
     end,
-    case lists:foldl(Fun, next_schema, Methods) of
+    case lists:foldl(Fun, next_schema, Schemes) of
         next_schema ->
             {error, ?E_AUTHENTICATION, St};
         {Schema, {Customers, BadRecipients}} ->
