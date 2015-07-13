@@ -15,5 +15,6 @@
 -define(E_SEND_FAILED,              "550 Send failed").
 -define(E_INVALID_RECIPIENT_POLICY, "550 Rejected by invalid recipient policy").
 -define(E_CREDIT_LIMIT_EXCEEDED,    "550 Customer's credit limit is exceeded").
+-define(E_THROTTLED,                "450 Throttled").
 
 -endif.

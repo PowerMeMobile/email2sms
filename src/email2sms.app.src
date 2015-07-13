@@ -6,7 +6,8 @@
         kernel,
         stdlib,
         gen_smtp,
-        alley_services
+        alley_services,
+        jobs
     ]},
     {mod, {email2sms_app, []}},
     {env, []}

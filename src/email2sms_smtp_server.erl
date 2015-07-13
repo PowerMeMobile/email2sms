@@ -146,8 +146,7 @@ handle_DATA(From, To, Data, St) ->
 
     ReqTime = calendar:universal_time(),
     Res =
-        try
-            handle_data(From, To, Data, St)
+        try handle_data(From, To, Data, St)
         catch
             Class:Error ->
                 Stacktrace = erlang:get_stacktrace(),
@@ -411,7 +410,8 @@ handle_data(send, St) when St#st.auth_schema =:= to_address ->
     Msg = St#st.message,
     Enc = St#st.encoding,
     Size = St#st.size,
-    Res = [send_message(C, [R], Msg, Enc, Size) || {C, R} <- lists:zip(Cs, Rs)],
+    Res = [send_message_throttled(St#st.auth_schema, C, [R], Msg, Enc, Size) ||
+            {C, R} <- lists:zip(Cs, Rs)],
     ReqIds = [ReqId || {ok, #send_result{result = ok, req_id = ReqId}} <- Res],
     case ReqIds of
         [] ->
@@ -426,7 +426,8 @@ handle_data(send, St) ->
     Msg = St#st.message,
     Enc = St#st.encoding,
     Size = St#st.size,
-    case send_message(Customer, Recipients, Msg, Enc, Size) of
+    case send_message_throttled(
+            St#st.auth_schema, Customer, Recipients, Msg, Enc, Size) of
         {ok, Result} ->
             send_result(Result, St);
         {error, Error} ->
@@ -447,6 +448,49 @@ is_recipient_routable(Email, CoverageTab) ->
             false;
         {_NetId, _DestAddr2, _ProvId, _Price} ->
             true
+    end.
+
+send_message_throttled(AuthSchema, Customer, Recipients, Message, Encoding, Size) ->
+    Prefix =
+        case AuthSchema of
+            to_address -> inbound;
+            _          -> outbound
+        end,
+    CustomerUuid = Customer#auth_customer_v2.customer_uuid,
+    OutboundRps = Customer#auth_customer_v2.rps,
+    {ok, InboundRps} = application:get_env(?APP, inbound_rps_per_user),
+
+    QName = {Prefix, CustomerUuid},
+    case {Prefix, jobs:queue_info(QName, rate_limit)}  of
+        {outbound, undefined} ->
+            jobs:add_queue(QName, [
+                {max_time, 1000},
+                {rate, [{limit, OutboundRps}]}
+            ]);
+        {outbound, Rate} when OutboundRps =/= Rate ->
+            jobs:modify_regulator(rate, QName, {rate, QName, 1}, [
+                {limit, OutboundRps}
+            ]);
+        {inbound, undefined} ->
+            jobs:add_queue(QName, [
+                {max_time, 1000},
+                {rate, [{limit, InboundRps}]}
+            ]);
+        {inbound, Rate} when InboundRps =/= Rate ->
+            jobs:modify_regulator(rate, QName, {rate, QName, 1}, [
+                {limit, InboundRps}
+            ]);
+        _ ->
+            nop
+    end,
+
+    case jobs:ask({Prefix, CustomerUuid}) of
+        {ok, _JobId} ->
+            send_message(Customer, Recipients, Message, Encoding, Size);
+        {error, rejected} ->
+            {error, throttled};
+        {error, timeout} ->
+            {error, throttled}
     end.
 
 send_message(Customer, Recipients, Message, Encoding, Size) ->
