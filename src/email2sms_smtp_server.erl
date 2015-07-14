@@ -456,11 +456,11 @@ send_message_throttled(AuthSchema, Customer, Recipients, Message, Encoding, Size
             to_address -> inbound;
             _          -> outbound
         end,
-    CustomerUuid = Customer#auth_customer_v2.customer_uuid,
+    CustomerId = Customer#auth_customer_v2.customer_id,
     OutboundRps = Customer#auth_customer_v2.rps,
     {ok, InboundRps} = application:get_env(?APP, inbound_rps_per_user),
 
-    QName = {Prefix, CustomerUuid},
+    QName = {Prefix, CustomerId},
     case {Prefix, jobs:queue_info(QName, rate_limit)}  of
         {outbound, undefined} ->
             jobs:add_queue(QName, [
@@ -484,7 +484,7 @@ send_message_throttled(AuthSchema, Customer, Recipients, Message, Encoding, Size
             nop
     end,
 
-    case jobs:ask({Prefix, CustomerUuid}) of
+    case jobs:ask({Prefix, CustomerId}) of
         {ok, _JobId} ->
             send_message(Customer, Recipients, Message, Encoding, Size);
         {error, rejected} ->
