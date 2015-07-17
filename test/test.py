@@ -22,6 +22,7 @@ AUTH_SUBJECT = '10009:user:password'
 AUTH_SUBJECT_BAD = 'bad auth subject'
 
 AUTH_TO_ADDR = '375296660009@mail.com'
+AUTH_TO_ADDR_NOT_ALLOWED = '375296660019@mail.com'
 AUTH_TO_ADDR_BAD = 'bad_number@mail.com'
 
 TO = '375296543210@mail.com'
@@ -95,6 +96,14 @@ def test_auth_to_address_fail(smtp):
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = AUTH_TO_ADDR_BAD
     (code, resp) = sendmail(smtp, msg['From'], AUTH_TO_ADDR_BAD, msg.as_string())
+    assert code == 550
+    assert resp == 'Invalid user account'
+
+def test_auth_to_address_no_allowed_fail(smtp):
+    msg = MIMEText('to_address test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = AUTH_TO_ADDR_NOT_ALLOWED
+    (code, resp) = sendmail(smtp, msg['From'], AUTH_TO_ADDR_NOT_ALLOWED, msg.as_string())
     assert code == 550
     assert resp == 'Invalid user account'
 

@@ -695,13 +695,28 @@ authenticate_by_msisdn(Email) ->
     Msisdn = msisdn_from_email(Email),
     case alley_services_auth:authenticate_by_msisdn(Msisdn, email) of
         {ok, #auth_resp_v2{result = #auth_customer_v2{} = Customer}} ->
-            {ok, Customer};
+            Features = Customer#auth_customer_v2.features,
+            case check_feature(<<"sms_from_email">>, Features) of
+                allow ->
+                    {ok, Customer};
+                denied ->
+                    ?log_error("Not allowed SMS from Email", []),
+                    {error, wrong_interface}
+            end;
         {ok, #auth_resp_v2{result = #auth_error_v2{code = Error}}} ->
             ?log_error("Got failed auth response with: ~p", [Error]),
             {error, Error};
         {error, Error} ->
             ?log_error("Auth failed with: ~p", [Error]),
             {error, Error}
+    end.
+
+check_feature(Feature, Features) ->
+    case lists:keyfind(Feature, #feature_v1.name, Features) of
+        #feature_v1{value = <<"true">>} ->
+            allow;
+        _ ->
+            denied
     end.
 
 common_smpp_params(Customer) ->
