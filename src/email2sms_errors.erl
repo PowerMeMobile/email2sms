@@ -29,6 +29,8 @@ format_error(credit_limit_exceeded) ->
     ?E_CREDIT_LIMIT_EXCEEDED;
 format_error(throttled) ->
     ?E_THROTTLED;
+format_error(internal) ->
+    ?E_INTERNAL;
 format_error(Error) when is_atom(Error) ->
     ["550 ", atom_to_list(Error)];
 format_error(Error) when is_binary(Error) ->

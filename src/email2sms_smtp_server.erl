@@ -307,6 +307,10 @@ handle_data(authenticate, St) ->
                     case Method(St) of
                         {ok, Result} ->
                             {Schema, Result};
+                        {stop, Reason} ->
+                            ?log_debug("Auth schema: ~p stopped with: ~p",
+                                [Schema, Reason]),
+                            {Schema, {stop, Reason}};
                         {error, Reason} ->
                             ?log_debug("Auth schema: ~p failed with: ~p",
                                 [Schema, Reason]),
@@ -318,6 +322,10 @@ handle_data(authenticate, St) ->
     end,
     case lists:foldl(Fun, next_schema, Schemes) of
         next_schema ->
+            {error, ?E_AUTHENTICATION, St};
+        {_Schema, {stop, internal}} ->
+            {error, ?E_INTERNAL, St};
+        {_Schema, {stop, _Reason}} ->
             {error, ?E_AUTHENTICATION, St};
         {Schema, {Customers, BadRecipients}} ->
             Recipients = St#st.recipients -- BadRecipients,
@@ -651,10 +659,19 @@ authenticate_from_address(St) ->
             {ok, Customer};
         {ok, #auth_resp_v2{result = #auth_error_v2{code = Error}}} ->
             ?log_error("Got failed auth response with: ~p", [Error]),
-            {error, Error};
+            StopReasons = [
+                wrong_interface, blocked_customer, blocked_user,
+                deactivated_customer, deactivated_user, credit_limit_exceeded
+            ],
+            case lists:member(Error, StopReasons) of
+                true ->
+                    {stop, Error};
+                false ->
+                    {error, Error}
+            end;
         {error, Error} ->
             ?log_error("Auth failed with: ~p", [Error]),
-            {error, Error}
+            {stop, internal}
     end.
 
 authenticate_subject(St) ->
@@ -669,10 +686,21 @@ authenticate_subject(St) ->
                         {ok, Customer};
                     {ok, #auth_resp_v2{result = #auth_error_v2{code = Error}}} ->
                         ?log_error("Got failed auth response with: ~p", [Error]),
-                        {error, Error};
+                        StopReasons = [
+                            wrong_password, wrong_interface,
+                            blocked_customer, blocked_user,
+                            deactivated_customer, deactivated_user,
+                            credit_limit_exceeded
+                        ],
+                        case lists:member(Error, StopReasons) of
+                            true ->
+                                {stop, Error};
+                            false ->
+                                {error, Error}
+                        end;
                     {error, Error} ->
                         ?log_error("Auth failed with: ~p", [Error]),
-                        {error, Error}
+                        {stop, internal}
                 end;
         _ ->
             {error, parse_subject}
@@ -708,7 +736,7 @@ authenticate_by_msisdn(Email) ->
             {error, Error};
         {error, Error} ->
             ?log_error("Auth failed with: ~p", [Error]),
-            {error, Error}
+            {error, internal}
     end.
 
 check_feature(Feature, Features) ->

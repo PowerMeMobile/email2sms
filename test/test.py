@@ -17,9 +17,11 @@ if EMAIL_PORT == None or EMAIL_PORT == '':
 
 AUTH_FROM_ADDR = 'email-postpaid@mail.com'
 AUTH_FROM_ADDR_BAD = 'd.klionsky@dev1team.net'
+AUTH_FROM_ADDR_USER_NO_EMAIL_IF = 'email_no_email_if-postpaid@mail.com'
 
 AUTH_SUBJECT = '10009:user:password'
 AUTH_SUBJECT_BAD = 'bad auth subject'
+AUTH_SUBJECT_BAD_PASSWORD = '10009:user:bad_password'
 
 AUTH_TO_ADDR = '375296660009@mail.com'
 AUTH_TO_ADDR_NOT_ALLOWED = '375296660019@mail.com'
@@ -67,6 +69,14 @@ def test_auth_from_address_fail(smtp):
     assert code == 550
     assert resp == 'Invalid user account'
 
+def test_auth_from_address_user_no_email_if_fail(smtp):
+    msg = MIMEText('from_address test')
+    msg['From'] = AUTH_FROM_ADDR_USER_NO_EMAIL_IF
+    msg['To'] = TO
+    (code, resp) = sendmail(smtp, msg['From'], TO, msg.as_string())
+    assert code == 550
+    assert resp == 'Invalid user account'
+
 def test_auth_subject_succ(smtp):
     msg = MIMEText('subject test')
     msg['From'] = AUTH_FROM_ADDR_BAD
@@ -75,11 +85,20 @@ def test_auth_subject_succ(smtp):
     res = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert {} == res
 
-def test_auth_subject_fail(smtp):
+def test_auth_subject_bad_subject_fail(smtp):
     msg = MIMEText('subject test')
     msg['From'] = AUTH_FROM_ADDR_BAD
     msg['To'] = TO
     msg['Subject'] = AUTH_SUBJECT_BAD
+    (code, resp) = sendmail(smtp, msg['From'], TO, msg.as_string())
+    assert code == 550
+    assert resp == 'Invalid user account'
+
+def test_auth_subject_bad_password_fail(smtp):
+    msg = MIMEText('subject test')
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = TO
+    msg['Subject'] = AUTH_SUBJECT_BAD_PASSWORD
     (code, resp) = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert code == 550
     assert resp == 'Invalid user account'
