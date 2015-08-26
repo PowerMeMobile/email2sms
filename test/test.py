@@ -72,7 +72,11 @@ def test_auth_from_address_fail(smtp):
 def test_auth_from_address_user_no_email_if_fail(smtp):
     msg = MIMEText('from_address test')
     msg['From'] = AUTH_FROM_ADDR_USER_NO_EMAIL_IF
-    msg['To'] = TO
+    ## both subject and to_address auth are valid.
+    ## the test should fail nonetheless because customer is found,
+    ## but doesn't have email interface
+    msg['To'] = AUTH_TO_ADDR
+    msg['Subject'] = AUTH_SUBJECT
     (code, resp) = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert code == 550
     assert resp == 'Invalid user account'
@@ -95,9 +99,12 @@ def test_auth_subject_bad_subject_fail(smtp):
     assert resp == 'Invalid user account'
 
 def test_auth_subject_bad_password_fail(smtp):
+    ## to_address auth is valid.
+    ## the test should fail nonetheless because customer is found,
+    ## but the password is wrong
     msg = MIMEText('subject test')
     msg['From'] = AUTH_FROM_ADDR_BAD
-    msg['To'] = TO
+    msg['To'] = AUTH_TO_ADDR
     msg['Subject'] = AUTH_SUBJECT_BAD_PASSWORD
     (code, resp) = sendmail(smtp, msg['From'], TO, msg.as_string())
     assert code == 550
