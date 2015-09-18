@@ -540,6 +540,8 @@ send_result(#send_result{result = ok, req_id = ReqId}, St) ->
         application:get_env(?APP, invalid_recipient_policy),
 
     case InvalidRecipientPolicy of
+        reject_message ->
+            nop;
         ignore_invalid ->
             nop;
         notify_invalid ->
