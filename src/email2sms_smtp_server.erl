@@ -406,6 +406,8 @@ handle_data(check_invalid_recipient_policy, St) ->
         reject_message when RejectedCount =/= 0 ->
             ?log_error("Message rejected by reject_message policy", []),
             {error, ?E_INVALID_RECIPIENT_POLICY, St};
+        reject_message ->
+            handle_data(send, St);
         ignore_invalid ->
             handle_data(send, St);
         notify_invalid ->
