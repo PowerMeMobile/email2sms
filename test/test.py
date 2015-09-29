@@ -286,6 +286,29 @@ def test_filter_by_coverage_2_ok_2_bad_fail(smtp):
     assert resp == 'Rejected by invalid recipient policy'
 
 #
+# Message content
+#
+
+# assumes max_msg_parts == 10
+def test_10_msg_parts_succ(smtp):
+    msg = MIMEText('Very Long Message ' * 85)
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = TO
+    msg['Subject'] = AUTH_SUBJECT
+    res = sendmail(smtp, msg['From'], TO, msg.as_string())
+    assert {} == res
+
+# assumes max_msg_parts == 10
+def test_11_msg_parts_fail(smtp):
+    msg = MIMEText('Very Long Message ' * 86)
+    msg['From'] = AUTH_FROM_ADDR_BAD
+    msg['To'] = TO
+    msg['Subject'] = AUTH_SUBJECT
+    (code, resp) = sendmail(smtp, msg['From'], TO, msg.as_string())
+    assert code == 550
+    assert resp == 'Too many SMS parts'
+
+#
 # Internal error
 #
 
