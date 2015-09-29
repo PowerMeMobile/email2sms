@@ -242,20 +242,9 @@ handle_data(filter_recipients_by_domains, St) ->
             ?log_error("No recipients left after filtering by domains", []),
             {error, ?E_NO_RECIPIENTS, St};
         true ->
-            handle_data(check_max_recipient_count, St#st{
+            handle_data(decode_message, St#st{
                 recipients = Recipients2
             })
-    end;
-
-handle_data(check_max_recipient_count, St) ->
-    {ok, MaxRecipients} = application:get_env(?APP, smtp_max_recipient_count),
-    Recipients = St#st.recipients,
-    if
-        length(Recipients) > MaxRecipients ->
-            ?log_error("Too many recipients", []),
-            {error, ?E_TOO_MANY_RECIPIENTS, St};
-        true ->
-            handle_data(decode_message, St)
     end;
 
 handle_data(decode_message, St) ->
@@ -370,7 +359,7 @@ handle_data(filter_recipients_by_coverage, St) when St#st.auth_schema =:= to_add
             ?log_error("No recipients left after filtering by coverage", []),
             {error, ?E_NO_RECIPIENTS, St};
         true ->
-            handle_data(check_invalid_recipient_policy, St#st{
+            handle_data(check_max_recipient_count, St#st{
                 customer = Cs2,
                 recipients = Rs2
             })
@@ -389,9 +378,20 @@ handle_data(filter_recipients_by_coverage, St) ->
             ?log_error("No recipients left after filtering by coverage", []),
             {error, ?E_NO_RECIPIENTS, St};
         true ->
-            handle_data(check_invalid_recipient_policy, St#st{
+            handle_data(check_max_recipient_count, St#st{
                 recipients = Recipients2
             })
+    end;
+
+handle_data(check_max_recipient_count, St) ->
+    {ok, MaxRecipients} = application:get_env(?APP, smtp_max_recipient_count),
+    Recipients = St#st.recipients,
+    if
+        length(Recipients) > MaxRecipients ->
+            ?log_error("Too many recipients", []),
+            {error, ?E_TOO_MANY_RECIPIENTS, St};
+        true ->
+            handle_data(check_invalid_recipient_policy, St)
     end;
 
 handle_data(check_invalid_recipient_policy, St) ->
