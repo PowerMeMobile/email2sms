@@ -51,7 +51,7 @@
     all_recipients :: [email()],
     recipients :: [email()],
     auth_schema :: auth_schema(),
-    customer :: #auth_customer_v2{} | [#auth_customer_v2{}],
+    customer :: #auth_customer_v3{} | [#auth_customer_v3{}],
     message :: binary(),
     encoding :: default | ucs2,
     size :: pos_integer()
@@ -445,11 +445,21 @@ handle_data(send, St) ->
     end.
 
 fill_coverage_tab(Customer, CoverageTab) ->
-    Networks = Customer#auth_customer_v2.networks,
-    Providers = Customer#auth_customer_v2.providers,
-    DefProvId = Customer#auth_customer_v2.default_provider_id,
+    Originator = Customer#auth_customer_v3.default_originator,
+    Coverages = Customer#auth_customer_v3.coverages,
+
+    {Networks, Providers} =
+        case lists:keyfind(Originator, #auth_coverage_v1.id, Coverages) of
+            #auth_coverage_v1{networks = Ns, providers = Ps} ->
+                {Ns, Ps};
+            false ->
+                #auth_coverage_v1{networks = Ns, providers = Ps} =
+                    lists:keyfind(customer, #auth_coverage_v1.id, Coverages),
+                {Ns, Ps}
+        end,
+
     alley_services_coverage:fill_coverage_tab(
-        Networks, Providers, DefProvId, CoverageTab).
+        Networks, Providers, CoverageTab).
 
 is_recipient_routable(Email, CoverageTab) ->
     Addr = msisdn_from_email(Email),
@@ -466,8 +476,8 @@ send_message_throttled(AuthSchema, Customer, Recipients, Message, Encoding, Size
             to_address -> inbound;
             _          -> outbound
         end,
-    CustomerId = Customer#auth_customer_v2.customer_id,
-    OutboundRps = Customer#auth_customer_v2.rps,
+    CustomerId = Customer#auth_customer_v3.customer_id,
+    OutboundRps = Customer#auth_customer_v3.rps,
     {ok, InboundRps} = application:get_env(?APP, inbound_rps_per_user),
 
     QName = {Prefix, CustomerId},
@@ -504,9 +514,9 @@ send_message_throttled(AuthSchema, Customer, Recipients, Message, Encoding, Size
     end.
 
 send_message(Customer, Recipients, Message, Encoding, Size) ->
-    CustomerUuid = Customer#auth_customer_v2.customer_uuid,
-    UserId = Customer#auth_customer_v2.user_id,
-    Originator = Customer#auth_customer_v2.default_source,
+    CustomerUuid = Customer#auth_customer_v3.customer_uuid,
+    UserId = Customer#auth_customer_v3.user_id,
+    Originator = Customer#auth_customer_v3.default_originator,
 
     Params = common_smpp_params(Customer) ++ [
         {esm_class, 3},
@@ -659,9 +669,9 @@ authenticate_from_address(St) ->
     ?log_debug("Auth schema: from_address", []),
     From = proplists:get_value(<<"from">>, St#st.headers),
     case alley_services_auth:authenticate_by_email(From, email) of
-        {ok, #auth_resp_v2{result = #auth_customer_v2{} = Customer}} ->
+        {ok, #auth_resp_v3{result = #auth_customer_v3{} = Customer}} ->
             {ok, Customer};
-        {ok, #auth_resp_v2{result = #auth_error_v2{code = Error}}} ->
+        {ok, #auth_resp_v3{result = #auth_error_v3{code = Error}}} ->
             ?log_error("Got failed auth response with: ~p", [Error]),
             StopReasons = [
                 wrong_interface, blocked_customer, blocked_user,
@@ -686,9 +696,9 @@ authenticate_subject(St) ->
             ?log_debug("CustomerId: ~p, UserId: ~p, Password: ~p",
                 [CustomerId, UserId, Password]),
                 case alley_services_auth:authenticate(CustomerId, UserId, Password, email) of
-                    {ok, #auth_resp_v2{result = #auth_customer_v2{} = Customer}} ->
+                    {ok, #auth_resp_v3{result = #auth_customer_v3{} = Customer}} ->
                         {ok, Customer};
-                    {ok, #auth_resp_v2{result = #auth_error_v2{code = Error}}} ->
+                    {ok, #auth_resp_v3{result = #auth_error_v3{code = Error}}} ->
                         ?log_error("Got failed auth response with: ~p", [Error]),
                         StopReasons = [
                             wrong_password, wrong_interface,
@@ -714,7 +724,7 @@ authenticate_to_address(St) ->
     ?log_debug("Auth schema: to_address", []),
     Recipients = St#st.recipients,
     Res = [{R, authenticate_by_msisdn(R)} || R <- Recipients],
-    Customers = [C || {_R, {ok, #auth_customer_v2{} = C}} <- Res],
+    Customers = [C || {_R, {ok, #auth_customer_v3{} = C}} <- Res],
     BadRecipients = [R || {R, {error, _}} <- Res],
     case Customers of
         [] ->
@@ -726,8 +736,8 @@ authenticate_to_address(St) ->
 authenticate_by_msisdn(Email) ->
     Msisdn = msisdn_from_email(Email),
     case alley_services_auth:authenticate_by_msisdn(Msisdn, email) of
-        {ok, #auth_resp_v2{result = #auth_customer_v2{} = Customer}} ->
-            Features = Customer#auth_customer_v2.features,
+        {ok, #auth_resp_v3{result = #auth_customer_v3{} = Customer}} ->
+            Features = Customer#auth_customer_v3.features,
             case check_feature(<<"sms_from_email">>, Features) of
                 allow ->
                     {ok, Customer};
@@ -735,7 +745,7 @@ authenticate_by_msisdn(Email) ->
                     ?log_error("Not allowed SMS from Email", []),
                     {error, wrong_interface}
             end;
-        {ok, #auth_resp_v2{result = #auth_error_v2{code = Error}}} ->
+        {ok, #auth_resp_v3{result = #auth_error_v3{code = Error}}} ->
             ?log_error("Got failed auth response with: ~p", [Error]),
             {error, Error};
         {error, Error} ->
@@ -752,10 +762,10 @@ check_feature(Feature, Features) ->
     end.
 
 common_smpp_params(Customer) ->
-    ReceiptsAllowed = Customer#auth_customer_v2.receipts_allowed,
-    NoRetry = Customer#auth_customer_v2.no_retry,
+    ReceiptsAllowed = Customer#auth_customer_v3.receipts_allowed,
+    NoRetry = Customer#auth_customer_v3.no_retry,
     Validity = alley_services_utils:fmt_validity(
-        Customer#auth_customer_v2.default_validity),
+        Customer#auth_customer_v3.default_validity),
     [
         {registered_delivery, ReceiptsAllowed},
         {service_type, <<>>},
