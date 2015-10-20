@@ -343,8 +343,9 @@ handle_data(filter_recipients_by_coverage, St) when St#st.auth_schema =:= to_add
     Rs = St#st.recipients,
 
     CheckFun = fun(Customer, Recipient) ->
-        Tab = ets:new(coverage_tab, [private]),
-        fill_coverage_tab(Customer, Tab),
+        Originator = Customer#auth_customer_v3.default_originator,
+        Coverages = Customer#auth_customer_v3.coverages,
+        {Tab, _} = alley_services_coverage:make_coverage_tab(Originator, Coverages),
         Routable = is_recipient_routable(Recipient, Tab),
         ets:delete(Tab),
         Routable
@@ -368,8 +369,9 @@ handle_data(filter_recipients_by_coverage, St) ->
     Customer = St#st.customer,
     Recipients = St#st.recipients,
 
-    Tab = ets:new(coverage_tab, [private]),
-    fill_coverage_tab(Customer, Tab),
+    Originator = Customer#auth_customer_v3.default_originator,
+    Coverages = Customer#auth_customer_v3.coverages,
+    {Tab, _} = alley_services_coverage:make_coverage_tab(Originator, Coverages),
     Recipients2 = [R || R <- Recipients, is_recipient_routable(R, Tab)],
     ets:delete(Tab),
 
@@ -443,23 +445,6 @@ handle_data(send, St) ->
         {error, Error} ->
             send_result(#send_result{result = Error}, St)
     end.
-
-fill_coverage_tab(Customer, CoverageTab) ->
-    Originator = Customer#auth_customer_v3.default_originator,
-    Coverages = Customer#auth_customer_v3.coverages,
-
-    {Networks, Providers} =
-        case lists:keyfind(Originator, #auth_coverage_v1.id, Coverages) of
-            #auth_coverage_v1{networks = Ns, providers = Ps} ->
-                {Ns, Ps};
-            false ->
-                #auth_coverage_v1{networks = Ns, providers = Ps} =
-                    lists:keyfind(customer, #auth_coverage_v1.id, Coverages),
-                {Ns, Ps}
-        end,
-
-    alley_services_coverage:fill_coverage_tab(
-        Networks, Providers, CoverageTab).
 
 is_recipient_routable(Email, CoverageTab) ->
     Addr = msisdn_from_email(Email),
