@@ -658,10 +658,8 @@ authenticate_from_address(St) ->
             {ok, Customer};
         {ok, #auth_resp_v3{result = #auth_error_v3{code = Error}}} ->
             ?log_error("Got failed auth response with: ~p", [Error]),
-            StopReasons = [
-                wrong_interface, blocked_customer, blocked_user,
-                deactivated_customer, deactivated_user, credit_limit_exceeded
-            ],
+            {ok, StopReasons} =
+                application:get_env(?APP, from_address_stop_reasons),
             case lists:member(Error, StopReasons) of
                 true ->
                     {stop, Error};
@@ -685,12 +683,8 @@ authenticate_subject(St) ->
                         {ok, Customer};
                     {ok, #auth_resp_v3{result = #auth_error_v3{code = Error}}} ->
                         ?log_error("Got failed auth response with: ~p", [Error]),
-                        StopReasons = [
-                            wrong_password, wrong_interface,
-                            blocked_customer, blocked_user,
-                            deactivated_customer, deactivated_user,
-                            credit_limit_exceeded
-                        ],
+                        {ok, StopReasons} =
+                            application:get_env(?APP, subject_stop_reasons),
                         case lists:member(Error, StopReasons) of
                             true ->
                                 {stop, Error};
