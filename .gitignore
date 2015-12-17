@@ -9,3 +9,4 @@ test/env/
 test/*.pyc
 test/*ipynb*
 TAGS
+rel/_tmp/
