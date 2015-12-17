@@ -1,7 +1,8 @@
 deps/*
-ebin/*
+ebin/*.beam
+ebin/*.app
 priv/*
-rel/email2sms/
+rel/email2sms*
 .eunit/
 test/__pycache__/
 test/env/
