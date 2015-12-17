@@ -10,6 +10,7 @@ all: generate
 generate: compile xref
 	@rm -rf ./rel/$(NAME)
 	@$(REBAR) generate
+	cd rel/$(NAME) && erl -eval '[ReleaseDir] = [D || D <- string:tokens(os:cmd("ls -1 releases/"), "\n"), D =/= "RELEASES", D =/= "start_erl.data"], ok = release_handler:create_RELEASES(".", "releases", "releases/"++ ReleaseDir ++"/email2sms.rel", []).' -s init stop -noshell && cd -
 
 compile: get-deps
 	@$(REBAR) compile
